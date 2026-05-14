@@ -1,0 +1,28 @@
+{
+  "name": "mem",
+  "version": "0.1.0",
+  "description": "MCP server for structured agent memory backed by SQLite.",
+  "type": "module",
+  "bin": {
+    "mem": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test build/**/*.test.js",
+    "start": "node build/index.js"
+  },
+  "files": [
+    "build",
+    "README.md"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "latest",
+    "better-sqlite3": "latest",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "latest",
+    "@types/node": "latest",
+    "typescript": "latest"
+  }
+}

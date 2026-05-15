@@ -29,6 +29,9 @@ go.work
 # Local mem data
 .memory/
 
+# Build output
+build/
+
 # OpenCode
 opencode.json
 .secrets/

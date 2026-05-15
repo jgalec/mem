@@ -140,6 +140,7 @@ func (s *MemoryStore) startSession(projectPath string, agentName *string, namesp
 		}
 		s.rt.SetWorkingContext(id, wc)
 	}
+	s.graphAutoLinkFeatureFromNamespace(pid, id, namespace)
 	return map[string]interface{}{"session": session, "continued": false}, nil
 }
 
@@ -190,7 +191,8 @@ func (s *MemoryStore) logEvent(sessionId string, kind string, content string, ev
 		kind = "note"
 	}
 	id := s.insertEvent(session["project_id"].(string), sessionId, kind, redact(content), evidenceRefs)
-	s.invalidateProject(session["project_id"].(string))
+	pid := session["project_id"].(string)
+	s.invalidateProject(pid)
 	if s.rt != nil {
 		wc := s.rt.GetWorkingContext(sessionId)
 		if wc != nil {
@@ -200,6 +202,12 @@ func (s *MemoryStore) logEvent(sessionId string, kind string, content string, ev
 			}
 			s.rt.SetWorkingContext(sessionId, wc)
 		}
+	}
+	switch kind {
+	case "file_changed":
+		s.graphAutoLinkFileChanges(pid, sessionId, content, evidenceRefs)
+	case "blocked":
+		s.graphAutoLinkBlocker(pid, sessionId, content)
 	}
 	details, _ := s.getDetails("event", id)
 	return map[string]interface{}{"event": details}, nil
@@ -235,7 +243,9 @@ func (s *MemoryStore) logDecision(sessionId string, decision string, rationale *
 	}
 
 	id, _ := result.LastInsertId()
-	s.invalidateProject(session["project_id"].(string))
+	pid := session["project_id"].(string)
+	s.graphAutoLinkDecision(pid, sessionId, id, decision, evidenceRefs)
+	s.invalidateProject(pid)
 	if s.rt != nil {
 		wc := s.rt.GetWorkingContext(sessionId)
 		if wc != nil {
@@ -376,6 +386,7 @@ func (s *MemoryStore) addLesson(projectId string, title string, description stri
 	}
 
 	id, _ := result.LastInsertId()
+	s.graphAutoLinkLesson(projectId, id, title, sourceSessionId, tags)
 	s.invalidateProject(projectId)
 	details, _ := s.getDetails("lesson", id)
 	if s.rt != nil && details != nil {

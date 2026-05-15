@@ -684,6 +684,57 @@ func (s *MemoryStore) graphCleanPath(raw string) string {
 	return cleaned
 }
 
+func (s *MemoryStore) graphBuildStartupContext(projectId string) map[string]interface{} {
+	activeFeatures, _ := s.queryRows(
+		"SELECT DISTINCT n.label, n.id FROM memory_graph_nodes n JOIN memory_graph_edges e ON e.to_node_id = n.id WHERE e.relationship = 'WORKED_ON' AND e.project_id = ? AND n.type = 'Feature' AND e.from_node_id IN (SELECT id FROM memory_graph_nodes WHERE project_id = ? AND type = 'Session' AND entity_ref IN (SELECT id FROM sessions WHERE project_id = ? AND status = 'active'))",
+		projectId, projectId, projectId,
+	)
+	recentBlockers, _ := s.queryRows(
+		"SELECT n.label, n.id, e.created_at FROM memory_graph_edges e JOIN memory_graph_nodes n ON n.id = e.to_node_id WHERE e.project_id = ? AND e.relationship = 'BLOCKED_BY' AND n.type = 'Blocker' ORDER BY e.id DESC LIMIT 5",
+		projectId,
+	)
+	recentFiles, _ := s.queryRows(
+		"SELECT DISTINCT n.label, n.id FROM memory_graph_edges e JOIN memory_graph_nodes n ON n.id = e.to_node_id WHERE e.project_id = ? AND e.relationship = 'TOUCHED' AND n.type = 'File' ORDER BY e.id DESC LIMIT 10",
+		projectId,
+	)
+
+	result := make(map[string]interface{})
+	if len(activeFeatures) > 0 {
+		result["active_features"] = activeFeatures
+	}
+	if len(recentBlockers) > 0 {
+		result["recent_blockers"] = recentBlockers
+	}
+	if len(recentFiles) > 0 {
+		result["recent_files"] = recentFiles
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func (s *MemoryStore) graphAutoLinkEvidence(projectId string, sessionId string, eventId int64, content string, evidenceRefs []string) {
+	label := content
+	if len(label) > 100 {
+		label = label[:100]
+	}
+	ref := fmt.Sprintf("event:%d", eventId)
+	s.graphLink(projectId, "Session", sessionId, &sessionId, "Evidence", label, &ref, "PRODUCED", evidenceRefs, &sessionId, &ref)
+	featureLabel := s.graphFindFeatureForSession(projectId, sessionId)
+	if featureLabel != "" {
+		s.graphLink(projectId, "Feature", featureLabel, nil, "Evidence", label, &ref, "PRODUCED", evidenceRefs, &sessionId, &ref)
+	}
+}
+
+func (s *MemoryStore) graphUpdateSessionSummary(sessionId string, summary *string) {
+	if summary == nil || *summary == "" {
+		return
+	}
+	meta := fmt.Sprintf(`{"summary": %q}`, *summary)
+	s.db.Exec("UPDATE memory_graph_nodes SET metadata_json = ? WHERE type = 'Session' AND label = ?", meta, sessionId)
+}
+
 func graphTypeList() string {
 	return "Project, Feature, Session, Decision, Evidence, Lesson, Blocker, File, Command"
 }

@@ -69,6 +69,9 @@ func (s *MemoryStore) getStartupContext(projectPath string, responseFormat strin
 		"recent_decisions": recentDecisions,
 		"relevant_lessons": relevantLessons,
 	}
+	if graphCtx := s.graphBuildStartupContext(pid); graphCtx != nil {
+		result["graph_context"] = graphCtx
+	}
 
 	if responseFormat == "detailed" {
 		events, _ := s.queryRows("SELECT id, session_id, kind, content, created_at FROM events WHERE project_id = ? ORDER BY id DESC LIMIT 10", pid)
@@ -167,6 +170,7 @@ func (s *MemoryStore) closeSession(sessionId string, summary *string) (map[strin
 	}
 
 	s.insertEvent(session["project_id"].(string), sessionId, "closed", redact(rawSummary), nil)
+	s.graphUpdateSessionSummary(sessionId, summary)
 
 	details, _ := s.getDetails("session", sessionId)
 	s.invalidateProject(session["project_id"].(string))
@@ -208,6 +212,10 @@ func (s *MemoryStore) logEvent(sessionId string, kind string, content string, ev
 		s.graphAutoLinkFileChanges(pid, sessionId, content, evidenceRefs)
 	case "blocked":
 		s.graphAutoLinkBlocker(pid, sessionId, content)
+	default:
+		if len(evidenceRefs) > 0 {
+			s.graphAutoLinkEvidence(pid, sessionId, id, content, evidenceRefs)
+		}
 	}
 	details, _ := s.getDetails("event", id)
 	return map[string]interface{}{"event": details}, nil

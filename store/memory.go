@@ -1,4 +1,4 @@
-package main
+package store
 
 import (
 	"crypto/sha256"
@@ -18,6 +18,12 @@ type MemoryError struct{ msg string }
 
 func (e *MemoryError) Error() string { return e.msg }
 
+type MemoryStoreConfig struct {
+	Readonly  bool
+	ProjectId string
+	Rt        *runtime.Runtime
+}
+
 type MemoryStore struct {
 	db      *sql.DB
 	readonly bool
@@ -25,12 +31,8 @@ type MemoryStore struct {
 	rt      *runtime.Runtime
 }
 
-func newMemoryStore(db *sql.DB, options struct {
-	readonly  bool
-	projectId string
-	rt        *runtime.Runtime
-}) *MemoryStore {
-	return &MemoryStore{db: db, readonly: options.readonly, projectId: options.projectId, rt: options.rt}
+func NewMemoryStore(db *sql.DB, cfg MemoryStoreConfig) *MemoryStore {
+	return &MemoryStore{db: db, readonly: cfg.Readonly, projectId: cfg.ProjectId, rt: cfg.Rt}
 }
 
 func (s *MemoryStore) invalidateProject(pid string) {

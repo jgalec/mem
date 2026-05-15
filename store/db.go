@@ -1,4 +1,4 @@
-package main
+package store
 
 import (
 	"database/sql"
@@ -9,7 +9,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func openMemoryDb(dbPath string) (*sql.DB, error) {
+func OpenMemoryDb(dbPath string) (*sql.DB, error) {
 	resolved, err := filepath.Abs(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("resolve db path: %w", err)

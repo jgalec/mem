@@ -1,4 +1,4 @@
-package main
+package store
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func registerTools(server *mcp.Server, store *MemoryStore) {
+func RegisterTools(server *mcp.Server, store *MemoryStore) {
 	h := toolHandler
 
 	server.AddTool(&mcp.Tool{

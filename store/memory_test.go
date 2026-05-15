@@ -1,25 +1,19 @@
-package main
+package store
 
 import (
 	"strings"
 	"testing"
-
-	"github.com/jgalec/mem/runtime"
 )
 
 func newFixture(t *testing.T) *MemoryStore {
 	t.Helper()
 	dir := t.TempDir()
-	db, err := openMemoryDb(dir + "/memory.db")
+	db, err := OpenMemoryDb(dir + "/memory.db")
 	if err != nil {
-		t.Fatalf("openMemoryDb: %v", err)
+		t.Fatalf("OpenMemoryDb: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	return newMemoryStore(db, struct {
-		readonly  bool
-		projectId string
-		rt        *runtime.Runtime
-	}{})
+	return NewMemoryStore(db, MemoryStoreConfig{})
 }
 
 func TestStartupContextInitializesProjectMemoryCompactly(t *testing.T) {
@@ -332,17 +326,13 @@ func TestCloseSessionClosesAndRejectsWritesToClosed(t *testing.T) {
 
 func TestReadonlyModeRejectsWrites(t *testing.T) {
 	dir := t.TempDir()
-	db, err := openMemoryDb(dir + "/memory.db")
+	db, err := OpenMemoryDb(dir + "/memory.db")
 	if err != nil {
-		t.Fatalf("openMemoryDb: %v", err)
+		t.Fatalf("OpenMemoryDb: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
 
-	store := newMemoryStore(db, struct {
-		readonly  bool
-		projectId string
-		rt        *runtime.Runtime
-	}{readonly: true})
+	store := NewMemoryStore(db, MemoryStoreConfig{Readonly: true})
 
 	_, err = store.startSession(dir, nil, nil, false)
 	if err == nil {

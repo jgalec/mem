@@ -11,19 +11,11 @@ func registerTools(server *mcp.Server, store *MemoryStore) {
 	h := toolHandler
 
 	server.AddTool(&mcp.Tool{
-		Name:        "memory_get_startup_context",
-		Description: "Get compact project memory: active sessions, recent decisions, relevant lessons, and optional recent events.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_path":{"type":"string"},"response_format":{"type":"string","enum":["concise","detailed"]}},"required":["project_path"]}`),
+		Name:        "memory_add_lesson",
+		Description: "Store a strategic lesson tied to a source memory session.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"title":{"type":"string"},"description":{"type":"string"},"content":{"type":"string"},"source_session_id":{"type":"string"},"source_outcome":{"type":"string","enum":["success","failure"]},"status":{"type":"string","enum":["observed","hypothesis","consolidated"],"default":"observed"},"tags":{"type":"array","items":{"type":"string"},"default":[]},"evidence_refs":{"type":"array","items":{"type":"string"},"default":[]}},"required":["project_id","title","description","content","source_session_id"]}`),
 	}, h(func(args map[string]interface{}) (interface{}, error) {
-		return store.getStartupContext(requireString(args, "project_path"), optStringDefault(args, "response_format", "concise"))
-	}))
-
-	server.AddTool(&mcp.Tool{
-		Name:        "memory_start_session",
-		Description: "Create a memory session for a project. Pass continue_existing=true only when intentionally resuming the latest active session.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_path":{"type":"string"},"agent_name":{"type":"string"},"namespace":{"type":"string"},"continue_existing":{"type":"boolean","default":false}},"required":["project_path"]}`),
-	}, h(func(args map[string]interface{}) (interface{}, error) {
-		return store.startSession(requireString(args, "project_path"), optString(args, "agent_name"), optString(args, "namespace"), optBool(args, "continue_existing", false))
+		return store.addLesson(requireString(args, "project_id"), requireString(args, "title"), requireString(args, "description"), requireString(args, "content"), requireString(args, "source_session_id"), optString(args, "source_outcome"), optStringDefault(args, "status", "observed"), getStringSlice(args, "tags"), getStringSlice(args, "evidence_refs"))
 	}))
 
 	server.AddTool(&mcp.Tool{
@@ -35,43 +27,11 @@ func registerTools(server *mcp.Server, store *MemoryStore) {
 	}))
 
 	server.AddTool(&mcp.Tool{
-		Name:        "memory_log_event",
-		Description: "Record a relevant memory event in the current session. This does not control work state.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"session_id":{"type":"string"},"kind":{"type":"string","enum":["note","progress","tool_run","file_changed","test_run","docs_checked","blocked","closed"],"default":"note"},"content":{"type":"string"},"evidence_refs":{"type":"array","items":{"type":"string"},"default":[]}},"required":["session_id","content"]}`),
+		Name:        "memory_consolidate_lessons",
+		Description: "Suggest lesson consolidation actions. MVP is dry-run only.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"dry_run":{"type":"boolean","default":true}},"required":["project_id"]}`),
 	}, h(func(args map[string]interface{}) (interface{}, error) {
-		return store.logEvent(requireString(args, "session_id"), optStringDefault(args, "kind", "note"), requireString(args, "content"), getStringSlice(args, "evidence_refs"))
-	}))
-
-	server.AddTool(&mcp.Tool{
-		Name:        "memory_log_decision",
-		Description: "Record a technical or project decision. Rationale and evidence_refs are stored separately.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"session_id":{"type":"string"},"decision":{"type":"string"},"rationale":{"type":"string"},"alternatives_considered":{"type":"array","items":{"type":"string"},"default":[]},"evidence_refs":{"type":"array","items":{"type":"string"},"default":[]},"confidence":{"type":"string","enum":["low","medium","high"],"default":"medium"}},"required":["session_id","decision"]}`),
-	}, h(func(args map[string]interface{}) (interface{}, error) {
-		return store.logDecision(requireString(args, "session_id"), requireString(args, "decision"), optString(args, "rationale"), getStringSlice(args, "alternatives_considered"), getStringSlice(args, "evidence_refs"), optStringDefault(args, "confidence", "medium"))
-	}))
-
-	server.AddTool(&mcp.Tool{
-		Name:        "memory_search_lessons",
-		Description: "Search strategic lessons with precision-oriented keyword and tag matching.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"query":{"type":"string"},"tags":{"type":"array","items":{"type":"string"},"default":[]},"limit":{"type":"number","default":5},"response_format":{"type":"string","enum":["concise","detailed"]}},"required":["project_id"]}`),
-	}, h(func(args map[string]interface{}) (interface{}, error) {
-		return store.searchLessons(requireString(args, "project_id"), optStringDefault(args, "query", ""), getStringSlice(args, "tags"), optInt(args, "limit", 5), optStringDefault(args, "response_format", "concise"))
-	}))
-
-	server.AddTool(&mcp.Tool{
-		Name:        "memory_add_lesson",
-		Description: "Store a strategic lesson tied to a source memory session.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"title":{"type":"string"},"description":{"type":"string"},"content":{"type":"string"},"source_session_id":{"type":"string"},"source_outcome":{"type":"string","enum":["success","failure"]},"status":{"type":"string","enum":["observed","hypothesis","consolidated"],"default":"observed"},"tags":{"type":"array","items":{"type":"string"},"default":[]},"evidence_refs":{"type":"array","items":{"type":"string"},"default":[]}},"required":["project_id","title","description","content","source_session_id"]}`),
-	}, h(func(args map[string]interface{}) (interface{}, error) {
-		return store.addLesson(requireString(args, "project_id"), requireString(args, "title"), requireString(args, "description"), requireString(args, "content"), requireString(args, "source_session_id"), optString(args, "source_outcome"), optStringDefault(args, "status", "observed"), getStringSlice(args, "tags"), getStringSlice(args, "evidence_refs"))
-	}))
-
-	server.AddTool(&mcp.Tool{
-		Name:        "memory_reinforce_lesson",
-		Description: "Reinforce an existing lesson when it proves useful again, without creating a duplicate.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"lesson_id":{"type":"number"},"evidence_refs":{"type":"array","items":{"type":"string"},"default":[]}},"required":["lesson_id"]}`),
-	}, h(func(args map[string]interface{}) (interface{}, error) {
-		return store.reinforceLesson(optInt64(args, "lesson_id", 0), getStringSlice(args, "evidence_refs"))
+		return store.consolidateLessons(requireString(args, "project_id"), optBool(args, "dry_run", true))
 	}))
 
 	server.AddTool(&mcp.Tool{
@@ -83,11 +43,51 @@ func registerTools(server *mcp.Server, store *MemoryStore) {
 	}))
 
 	server.AddTool(&mcp.Tool{
-		Name:        "memory_consolidate_lessons",
-		Description: "Suggest lesson consolidation actions. MVP is dry-run only.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"dry_run":{"type":"boolean","default":true}},"required":["project_id"]}`),
+		Name:        "memory_get_startup_context",
+		Description: "Get compact project memory: active sessions, recent decisions, relevant lessons, and optional recent events.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_path":{"type":"string"},"response_format":{"type":"string","enum":["concise","detailed"]}},"required":["project_path"]}`),
 	}, h(func(args map[string]interface{}) (interface{}, error) {
-		return store.consolidateLessons(requireString(args, "project_id"), optBool(args, "dry_run", true))
+		return store.getStartupContext(requireString(args, "project_path"), optStringDefault(args, "response_format", "concise"))
+	}))
+
+	server.AddTool(&mcp.Tool{
+		Name:        "memory_log_decision",
+		Description: "Record a technical or project decision. Rationale and evidence_refs are stored separately.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"session_id":{"type":"string"},"decision":{"type":"string"},"rationale":{"type":"string"},"alternatives_considered":{"type":"array","items":{"type":"string"},"default":[]},"evidence_refs":{"type":"array","items":{"type":"string"},"default":[]},"confidence":{"type":"string","enum":["low","medium","high"],"default":"medium"}},"required":["session_id","decision"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.logDecision(requireString(args, "session_id"), requireString(args, "decision"), optString(args, "rationale"), getStringSlice(args, "alternatives_considered"), getStringSlice(args, "evidence_refs"), optStringDefault(args, "confidence", "medium"))
+	}))
+
+	server.AddTool(&mcp.Tool{
+		Name:        "memory_log_event",
+		Description: "Record a relevant memory event in the current session. This does not control work state.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"session_id":{"type":"string"},"kind":{"type":"string","enum":["note","progress","tool_run","file_changed","test_run","docs_checked","blocked","closed"],"default":"note"},"content":{"type":"string"},"evidence_refs":{"type":"array","items":{"type":"string"},"default":[]}},"required":["session_id","content"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.logEvent(requireString(args, "session_id"), optStringDefault(args, "kind", "note"), requireString(args, "content"), getStringSlice(args, "evidence_refs"))
+	}))
+
+	server.AddTool(&mcp.Tool{
+		Name:        "memory_reinforce_lesson",
+		Description: "Reinforce an existing lesson when it proves useful again, without creating a duplicate.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"lesson_id":{"type":"number"},"evidence_refs":{"type":"array","items":{"type":"string"},"default":[]}},"required":["lesson_id"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.reinforceLesson(optInt64(args, "lesson_id", 0), getStringSlice(args, "evidence_refs"))
+	}))
+
+	server.AddTool(&mcp.Tool{
+		Name:        "memory_search_lessons",
+		Description: "Search strategic lessons with precision-oriented keyword and tag matching.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"query":{"type":"string"},"tags":{"type":"array","items":{"type":"string"},"default":[]},"limit":{"type":"number","default":5},"response_format":{"type":"string","enum":["concise","detailed"]}},"required":["project_id"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.searchLessons(requireString(args, "project_id"), optStringDefault(args, "query", ""), getStringSlice(args, "tags"), optInt(args, "limit", 5), optStringDefault(args, "response_format", "concise"))
+	}))
+
+	server.AddTool(&mcp.Tool{
+		Name:        "memory_start_session",
+		Description: "Create a memory session for a project. Pass continue_existing=true only when intentionally resuming the latest active session.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_path":{"type":"string"},"agent_name":{"type":"string"},"namespace":{"type":"string"},"continue_existing":{"type":"boolean","default":false}},"required":["project_path"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.startSession(requireString(args, "project_path"), optString(args, "agent_name"), optString(args, "namespace"), optBool(args, "continue_existing", false))
 	}))
 
 }

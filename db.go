@@ -124,6 +124,38 @@ CREATE TRIGGER IF NOT EXISTS reasoning_memories_au AFTER UPDATE ON reasoning_mem
   INSERT INTO reasoning_memories_fts(rowid, project_id, title, description, content, tags)
   VALUES (new.id, new.project_id, new.title, new.description, new.content, COALESCE(new.tags, ''));
 END;
+
+CREATE TABLE IF NOT EXISTS memory_graph_nodes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('Project','Feature','Session','Decision','Evidence','Lesson','Blocker','File','Command')),
+  entity_ref TEXT,
+  label TEXT NOT NULL,
+  metadata_json TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+CREATE TABLE IF NOT EXISTS memory_graph_edges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id TEXT NOT NULL,
+  from_node_id INTEGER NOT NULL,
+  to_node_id INTEGER NOT NULL,
+  relationship TEXT NOT NULL,
+  evidence_refs TEXT,
+  source_session_id TEXT,
+  source_entity TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (project_id) REFERENCES projects(id),
+  FOREIGN KEY (from_node_id) REFERENCES memory_graph_nodes(id),
+  FOREIGN KEY (to_node_id) REFERENCES memory_graph_nodes(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_project_type ON memory_graph_nodes(project_id, type);
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_entity_ref ON memory_graph_nodes(entity_ref);
+CREATE INDEX IF NOT EXISTS idx_graph_edges_from ON memory_graph_edges(from_node_id);
+CREATE INDEX IF NOT EXISTS idx_graph_edges_to ON memory_graph_edges(to_node_id);
+CREATE INDEX IF NOT EXISTS idx_graph_edges_relationship ON memory_graph_edges(relationship);
 `
 	if _, err := db.Exec(ddl); err != nil {
 		return fmt.Errorf("create schema: %w", err)

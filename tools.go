@@ -89,6 +89,48 @@ func registerTools(server *mcp.Server, store *MemoryStore) {
 	}, h(func(args map[string]interface{}) (interface{}, error) {
 		return store.consolidateLessons(requireString(args, "project_id"), optBool(args, "dry_run", true))
 	}))
+
+	server.AddTool(&mcp.Tool{
+		Name:        "memory_graph_link",
+		Description: "Link two entities in the memory graph. Upserts both nodes and creates a directed relationship edge between them. Use this to record what sessions worked on features, which files a feature touched, what decisions were made, what evidence backs them, etc.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"from_type":{"type":"string","enum":["Project","Feature","Session","Decision","Evidence","Lesson","Blocker","File","Command"]},"from_label":{"type":"string"},"from_entity_ref":{"type":"string"},"to_type":{"type":"string","enum":["Project","Feature","Session","Decision","Evidence","Lesson","Blocker","File","Command"]},"to_label":{"type":"string"},"to_entity_ref":{"type":"string"},"relationship":{"type":"string","enum":["WORKED_ON","TOUCHED","MADE","SUPPORTED_BY","PRODUCED","FROM_COMMAND","DERIVED_FROM","BLOCKED_BY","DEPENDS_ON"]},"evidence_refs":{"type":"array","items":{"type":"string"},"default":[]},"source_session_id":{"type":"string"},"source_entity":{"type":"string"}},"required":["project_id","from_type","from_label","to_type","to_label","relationship"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.graphLink(
+			requireString(args, "project_id"),
+			requireString(args, "from_type"), requireString(args, "from_label"), optString(args, "from_entity_ref"),
+			requireString(args, "to_type"), requireString(args, "to_label"), optString(args, "to_entity_ref"),
+			requireString(args, "relationship"),
+			getStringSlice(args, "evidence_refs"),
+			optString(args, "source_session_id"), optString(args, "source_entity"),
+		)
+	}))
+
+	server.AddTool(&mcp.Tool{
+		Name:        "memory_graph_batch_link",
+		Description: "Create multiple graph links in a single call. Each link upserts nodes and creates a relationship edge. More efficient than calling graph_link repeatedly.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"links":{"type":"array","items":{"type":"object","properties":{"project_id":{"type":"string"},"from_type":{"type":"string","enum":["Project","Feature","Session","Decision","Evidence","Lesson","Blocker","File","Command"]},"from_label":{"type":"string"},"from_entity_ref":{"type":"string"},"to_type":{"type":"string","enum":["Project","Feature","Session","Decision","Evidence","Lesson","Blocker","File","Command"]},"to_label":{"type":"string"},"to_entity_ref":{"type":"string"},"relationship":{"type":"string","enum":["WORKED_ON","TOUCHED","MADE","SUPPORTED_BY","PRODUCED","FROM_COMMAND","DERIVED_FROM","BLOCKED_BY","DEPENDS_ON"]},"evidence_refs":{"type":"array","items":{"type":"string"},"default":[]},"source_session_id":{"type":"string"},"source_entity":{"type":"string"}},"required":["project_id","from_type","from_label","to_type","to_label","relationship"]}}},"required":["links"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		rawLinks, ok := args["links"].([]interface{})
+		if !ok {
+			return nil, &MemoryError{"links must be an array of link objects."}
+		}
+		links := make([]map[string]interface{}, len(rawLinks))
+		for i, v := range rawLinks {
+			if m, ok := v.(map[string]interface{}); ok {
+				links[i] = m
+			}
+		}
+		return store.graphBatchLink(links)
+	}))
+
+	server.AddTool(&mcp.Tool{
+		Name:        "memory_graph_neighbors",
+		Description: "Get the neighbors of a graph node. Returns the node itself, its connected nodes, and the edges between them. Filter by direction (outgoing/incoming/both) and optionally by relationship type.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"node_id":{"type":"number"},"direction":{"type":"string","enum":["outgoing","incoming","both"],"default":"both"},"relationship":{"type":"string","enum":["WORKED_ON","TOUCHED","MADE","SUPPORTED_BY","PRODUCED","FROM_COMMAND","DERIVED_FROM","BLOCKED_BY","DEPENDS_ON"]}},"required":["node_id"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.graphNeighbors(optInt64(args, "node_id", 0), optStringDefault(args, "direction", "both"), optString(args, "relationship"))
+	}))
+
 }
 
 func toolHandler(fn func(args map[string]interface{}) (interface{}, error)) mcp.ToolHandler {

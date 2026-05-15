@@ -558,6 +558,137 @@ func TestGraphAutoLinkOnAddLessonCreatesLessonNode(t *testing.T) {
 	}
 }
 
+func TestFullMemoryFlowIntegration(t *testing.T) {
+	store := newFixture(t)
+	dir := t.TempDir()
+
+	ctx, err := store.getStartupContext(dir, "detailed")
+	if err != nil {
+		t.Fatalf("getStartupContext: %v", err)
+	}
+	pid := ctx["project"].(map[string]interface{})["id"].(string)
+
+	session, err := store.startSession(dir, ptr("test-agent"), ptr("auth/jwt"), false)
+	if err != nil {
+		t.Fatalf("startSession: %v", err)
+	}
+	sid := session["session"].(map[string]interface{})["id"].(string)
+
+	_, err = store.logEvent(sid, "file_changed", "updated auth/middleware.go for token validation", []string{"auth/middleware.go"})
+	if err != nil {
+		t.Fatalf("logEvent file_changed: %v", err)
+	}
+	_, err = store.logEvent(sid, "test_run", "ran auth unit tests", []string{"auth/middleware_test.go"})
+	if err != nil {
+		t.Fatalf("logEvent test_run: %v", err)
+	}
+
+	rationale := "Stateless and auditable"
+	decision, err := store.logDecision(sid, "Use JWT over sessions", &rationale, nil, []string{"auth/middleware.go"}, "high")
+	if err != nil {
+		t.Fatalf("logDecision: %v", err)
+	}
+	did := decision["decision"].(map[string]interface{})["id"].(int64)
+
+	lesson, err := store.addLesson(pid, "Validate tokens early", "Check JWT before hitting handlers", "Middleware chain should reject invalid tokens at the edge", sid, ptr("success"), "consolidated", []string{"auth", "middleware"}, []string{"auth/middleware.go"})
+	if err != nil {
+		t.Fatalf("addLesson: %v", err)
+	}
+	lid := lesson["lesson"].(map[string]interface{})["id"].(int64)
+
+	reinforced, err := store.reinforceLesson(lid, []string{"auth/middleware_test.go"})
+	if err != nil {
+		t.Fatalf("reinforceLesson: %v", err)
+	}
+	if intVal(reinforced["lesson"].(map[string]interface{}), "occurrences") != 2 {
+		t.Error("occurrences should be 2 after reinforce")
+	}
+
+	decisionDetail, err := store.getDetails("decision", fmt.Sprintf("%d", did))
+	if err != nil {
+		t.Fatalf("getDetails decision: %v", err)
+	}
+	if decisionDetail["rationale"] != "Stateless and auditable" {
+		t.Errorf("decision rationale: %v", decisionDetail["rationale"])
+	}
+
+	lessonDetail, err := store.getDetails("lesson", fmt.Sprintf("%d", lid))
+	if err != nil {
+		t.Fatalf("getDetails lesson: %v", err)
+	}
+	if lessonDetail["title"] != "Validate tokens early" {
+		t.Errorf("lesson title: %v", lessonDetail["title"])
+	}
+
+	sessionDetail, err := store.getDetails("session", sid)
+	if err != nil {
+		t.Fatalf("getDetails session: %v", err)
+	}
+	if sessionDetail["status"] != "active" {
+		t.Errorf("session status: %v", sessionDetail["status"])
+	}
+
+	search, err := store.searchLessons(pid, "JWT token", []string{"auth"}, 3, "detailed")
+	if err != nil {
+		t.Fatalf("searchLessons: %v", err)
+	}
+	lessons := search["lessons"].([]map[string]interface{})
+	if len(lessons) == 0 {
+		t.Fatal("expected at least 1 lesson in search results")
+	}
+
+	consolidation, err := store.consolidateLessons(pid, true)
+	if err != nil {
+		t.Fatalf("consolidateLessons: %v", err)
+	}
+	if consolidation["suggestions"] == nil {
+		t.Error("expected suggestions key in consolidation result")
+	}
+
+	summary := "Implemented JWT auth with early token validation"
+	closed, err := store.closeSession(sid, &summary)
+	if err != nil {
+		t.Fatalf("closeSession: %v", err)
+	}
+	if closed["session"].(map[string]interface{})["status"] != "closed" {
+		t.Error("session should be closed")
+	}
+
+	finalCtx, err := store.getStartupContext(dir, "detailed")
+	if err != nil {
+		t.Fatalf("final getStartupContext: %v", err)
+	}
+	activeSessions := finalCtx["active_sessions"].([]map[string]interface{})
+	if len(activeSessions) != 0 {
+		t.Error("no active sessions expected after close")
+	}
+	recentDecisions := finalCtx["recent_decisions"].([]map[string]interface{})
+	if len(recentDecisions) == 0 {
+		t.Error("expected recent decisions in startup context")
+	}
+	relevantLessons := finalCtx["relevant_lessons"].([]map[string]interface{})
+	if len(relevantLessons) == 0 {
+		t.Error("expected relevant lessons in startup context")
+	}
+
+	if finalCtx["graph_context"] == nil {
+		t.Error("expected graph_context in startup context")
+	}
+	gc := finalCtx["graph_context"].(map[string]interface{})
+	if files, ok := gc["recent_files"].([]map[string]interface{}); ok {
+		found := false
+		for _, f := range files {
+			if f["label"] == "auth/middleware.go" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected auth/middleware.go in graph_context recent_files")
+		}
+	}
+}
+
 func ptr(s string) *string {
 	return &s
 }

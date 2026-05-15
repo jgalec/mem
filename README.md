@@ -1,182 +1,164 @@
 # mem
 
-Simple STDIO MCP server for compact, auditable project memory, backed by SQLite.
+> Compact, auditable project memory for AI coding agents — backed by SQLite, served over MCP.
 
-It stores lightweight project memory (sessions, events, decisions, and lessons). It does not manage tasks.
+**mem** is an [MCP](https://modelcontextprotocol.io/) server that gives AI coding agents persistent memory across sessions. It stores lessons, decisions, events, and session history in a local SQLite database, with full-text search, graph-aware context, and a runtime cognition layer that keeps hot memory fast.
 
-## Quickstart
+---
 
-```powershell
-npm install
-npm run build
-npm test
-```
+## Features
 
-To start the server manually over STDIO:
+- **Zero config** — just point it at a project path and start writing memory
+- **Full-text search** — SQLite FTS5 with BM25 ranking for lesson retrieval
+- **Graph layer** — auto-links sessions, features, files, decisions, blockers, and evidence
+- **Runtime cognition** — hot lessons, retrieval cache, startup cache, and working context
+- **Redaction** — automatically strips API keys, tokens, and secrets from stored content
+- **Read-only mode** — safe read-only operation for inspection without writes
+- **Single binary** — no dependencies at runtime beyond the OS
 
-```powershell
-node build/index.js
-```
-
-Important: when running over STDIO, do not write logs to stdout. This server uses stderr for operational messages.
+---
 
 ## Requirements
 
-- Node.js 24 or higher.
-- npm.
+- [Go](https://go.dev/dl/) 1.26+
+- SQLite (bundled via [modernc.org/sqlite](https://modernc.org/sqlite) — no CGO needed)
 
-Note: `better-sqlite3` is the only native dependency.
+---
 
-## Configuration
+## Installation
 
-Example for a client compatible with `mcpServers`:
+```powershell
+go install github.com/jgalec/mem@latest
+```
+
+Or build from source:
+
+```powershell
+git clone https://github.com/jgalec/mem.git
+cd mem
+go build -o build/mem.exe .
+```
+
+---
+
+## Quickstart
+
+Add mem to your MCP client configuration:
 
 ```json
 {
   "mcpServers": {
     "memory": {
-      "command": "node",
-      "args": ["<ABSOLUTE_PATH_TO_REPO>/build/index.js"],
+      "command": "<PATH_TO_REPO>/build/mem.exe",
       "env": {
-        "MEM_DB_PATH": "<ABSOLUTE_PATH_TO_REPO>/.memory/memory.db"
+        "MEM_DB_PATH": "<PATH_TO_REPO>/.memory/memory.db"
       }
     }
   }
 }
 ```
 
-On Windows, you can use `/` paths as shown above or escape `\\` inside JSON.
+On first use, your AI agent calls `memory_get_startup_context` with a `project_path`. mem creates the project and database automatically — no setup required.
 
-## Environment Variables
-
-- `MEM_DB_PATH`: SQLite path. Default: `.memory/memory.db`.
-- `MEM_PROJECT_ID`: fixed project id. Default: hash of the resolved `project_path`.
-- `MEM_READONLY`: `true`, `1`, or `yes` to block writes.
-
-## What It Stores
-
-The model is intentionally small and project-agnostic:
-
-- `project`: workspace scope.
-- `session`: one chat or work turn that produced memory.
-- `event`: relevant note or evidence-backed occurrence.
-- `decision`: durable technical or project decision.
-- `lesson`: reusable knowledge that should survive across sessions.
-
-Anything that controls work state belongs outside this MCP, in your project documentation.
+---
 
 ## Recommended Flow
 
-1. `memory_get_startup_context` with `project_path` to create or retrieve project memory.
-2. `memory_start_session` to open a memory session.
-3. `memory_log_event` for relevant notes, checks, evidence, or outcomes.
-4. `memory_log_decision` for decisions whose rationale should persist.
-5. `memory_add_lesson` only for reusable lessons tied to the source session.
-6. `memory_reinforce_lesson` when an existing lesson proves useful again.
-7. `memory_close_session` at the end of the chat/work turn.
+1. **`memory_get_startup_context`** — retrieve or initialize project memory
+2. **`memory_start_session`** — open a new memory session (optionally with a `namespace`)
+3. **`memory_log_event`** — record notes, file changes, test runs, or blockers
+4. **`memory_log_decision`** — persist technical decisions with rationale
+5. **`memory_search_lessons`** — find relevant lessons by keyword or tag
+6. **`memory_add_lesson`** — store a reusable lesson tied to the source session
+7. **`memory_reinforce_lesson`** — boost an existing lesson instead of duplicating
+8. **`memory_close_session`** — close the session with an optional summary
 
-Optional: pass `namespace` to group related sessions (kebab-case segments, max 3 levels), for example `auth/jwt`, `build/ci`, `memory/search`, `auth/jwt/refresh`.
-
-## Examples
-
-Startup context input:
-
-```json
-{
-  "project_path": "<ABSOLUTE_OR_RELATIVE_PROJECT_PATH>",
-  "response_format": "concise"
-}
-```
-
-Start session with namespace:
-
-```json
-{
-  "project_path": "<ABSOLUTE_OR_RELATIVE_PROJECT_PATH>",
-  "agent_name": "opencode",
-  "namespace": "memory/search"
-}
-```
-
-Log an event:
-
-```json
-{
-  "session_id": "<session-id>",
-  "kind": "docs_checked",
-  "content": "Confirmed that the memory MCP should not control work state.",
-  "evidence_refs": ["README.md"]
-}
-```
-
-Log a decision:
-
-```json
-{
-  "session_id": "<session-id>",
-  "decision": "Keep mem focused on memory, not task management.",
-  "rationale": "Workflow state and verification rules belong in project documentation.",
-  "evidence_refs": ["README.md"],
-  "confidence": "high"
-}
-```
-
-Lesson search (FTS5 keyword search + tag boosts):
-
-```json
-{
-  "project_id": "<project-id>",
-  "query": "failing test",
-  "tags": ["tests"],
-  "limit": 5,
-  "response_format": "concise"
-}
-```
-
-## Session Lifecycle
-
-A memory session represents one active chat or work turn. Close every session when the current turn ends unless the next turn should intentionally reuse it with `continue_existing: true`.
-
-Current behavior:
-
-- `active` sessions become `closed`.
-- `closed_at` is set automatically.
-- `summary` is optional but recommended.
-- Closed sessions cannot be used for further writes.
-- `memory_start_session` with `continue_existing: true` only reuses active sessions.
-
-Example session close:
-
-```json
-{
-  "session_id": "<session-id>",
-  "summary": "Recorded memory decisions and reusable lessons."
-}
-```
+---
 
 ## Tools
 
-- `memory_get_startup_context`
-- `memory_start_session`
-- `memory_close_session`
-- `memory_log_event`
-- `memory_log_decision`
-- `memory_search_lessons`
-- `memory_add_lesson`
-- `memory_reinforce_lesson`
-- `memory_get_details`
-- `memory_consolidate_lessons`
+| Tool | Description |
+|------|-------------|
+| `memory_get_startup_context` | Get project snapshot: active sessions, decisions, lessons, graph context |
+| `memory_start_session` | Create a memory session for a project |
+| `memory_close_session` | Close an active session with optional summary |
+| `memory_log_event` | Record an event (note, progress, file change, test run, blocker, etc.) |
+| `memory_log_decision` | Log a technical decision with rationale and evidence |
+| `memory_search_lessons` | Full-text search lessons with tag and status scoring |
+| `memory_add_lesson` | Store a reusable strategic lesson |
+| `memory_reinforce_lesson` | Boost an existing lesson's confidence and occurrences |
+| `memory_get_details` | Retrieve full details for an event, decision, lesson, or session |
+| `memory_consolidate_lessons` | Get suggestions for merging duplicates or promoting lessons |
 
-## Key Rules
+---
 
-- No free-form SQL is exposed.
-- STDIO does not use stdout logs; errors go to stderr.
-- The MCP does not create, start, close, approve, or validate work items.
-- `rationale` and `evidence_refs` are stored separately.
-- Lessons must be tied to a source session.
-- Reinforce repeated lessons instead of adding duplicates.
-- Responses are compact by default; use details only when needed.
+## Configuration
 
-## Data Location
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MEM_DB_PATH` | `.memory/memory.db` | Path to the SQLite database |
+| `MEM_PROJECT_ID` | auto (SHA-256) | Fixed project identifier |
+| `MEM_READONLY` | `false` | Set to `true`, `1`, or `yes` to block writes |
 
-By default, memory is stored in `.memory/memory.db` (relative to the working directory), or in `MEM_DB_PATH` if configured.
+---
+
+## Architecture
+
+```
+mem/
+├── main.go              # Entry point, MCP server setup
+├── store/               # Core memory logic
+│   ├── db.go            # Database connection, migrations, schema
+│   ├── memory.go        # MemoryStore: CRUD for all entity types
+│   ├── graph.go         # Graph layer: nodes, edges, auto-linking
+│   ├── helpers.go       # Scoring, redaction, normalization, utilities
+│   ├── tools.go         # MCP tool registration and argument parsing
+│   └── memory_test.go   # Integration tests
+├── runtime/             # Hot memory and caching layer
+│   ├── cache.go         # Generic TTL cache
+│   ├── hot.go           # Hot lessons tracking
+│   ├── queue.go         # Deferred write batching
+│   ├── session.go       # Working context per session
+│   ├── snapshot.go      # Startup context snapshots
+│   └── runtime.go       # Runtime orchestration
+└── build/               # Build output (gitignored)
+```
+
+### Data Model
+
+| Entity | Purpose |
+|--------|---------|
+| **Project** | Workspace scope identified by root path |
+| **Session** | One chat or work turn that produced memory |
+| **Event** | Relevant note or evidence-backed occurrence |
+| **Decision** | Durable technical or project decision |
+| **Lesson** | Reusable knowledge that survives across sessions |
+| **Graph Node** | Typed entity in the knowledge graph (Feature, File, Blocker, etc.) |
+| **Graph Edge** | Typed relationship between nodes (WORKED_ON, TOUCHED, DERIVED_FROM, etc.) |
+
+### Key Design Rules
+
+- Memory does not control work state — that belongs in your project docs
+- `rationale` and `evidence_refs` are stored separately from decisions
+- Lessons must be tied to a source session
+- Reinforce existing lessons instead of creating duplicates
+- Secrets (API keys, tokens, passwords) are automatically redacted
+- Compact responses by default; request `detailed` format only when needed
+
+---
+
+## Contributing
+
+Pull requests are welcome. Please ensure tests pass before submitting:
+
+```powershell
+go test ./...
+```
+
+For major changes, open an issue first to discuss your proposal.
+
+---
+
+## License
+
+[MIT](https://choosealicense.com/licenses/mit/)

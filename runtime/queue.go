@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"log"
 	"time"
 )
 
@@ -8,11 +9,6 @@ type WriteOp struct {
 	Query string
 	Args  []interface{}
 	Done  chan error
-}
-
-type writeBatchResult struct {
-	Ops []WriteOp
-	Err error
 }
 
 func (r *Runtime) WriteQueue() chan<- WriteOp {
@@ -67,7 +63,21 @@ func (r *Runtime) executeBatch(batch []WriteOp) {
 	}
 	var err error
 	if r.onFlush != nil {
-		err = r.onFlush(batch)
+		backoffs := []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond}
+		for attempt := 0; attempt <= len(backoffs); attempt++ {
+			err = r.onFlush(batch)
+			if err == nil {
+				break
+			}
+			if attempt < len(backoffs) {
+				log.Printf("write flush attempt %d failed: %v — retrying in %v",
+					attempt+1, err, backoffs[attempt])
+				time.Sleep(backoffs[attempt])
+			}
+		}
+		if err != nil {
+			log.Printf("write flush failed after all retries: %v — %d ops dropped", err, len(batch))
+		}
 	}
 	for _, op := range batch {
 		if op.Done != nil {

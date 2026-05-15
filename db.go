@@ -1,20 +1,40 @@
-import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+package main
 
-export type Db = Database.Database;
+import (
+	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
 
-export function openMemoryDb(dbPath: string): Db {
-  const resolved = resolve(dbPath);
-  mkdirSync(dirname(resolved), { recursive: true });
-  const db = new Database(resolved);
-  db.pragma("foreign_keys = ON");
-  migrate(db);
-  return db;
+	_ "modernc.org/sqlite"
+)
+
+func openMemoryDb(dbPath string) (*sql.DB, error) {
+	resolved, err := filepath.Abs(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve db path: %w", err)
+	}
+	dir := filepath.Dir(resolved)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("create db dir: %w", err)
+	}
+	db, err := sql.Open("sqlite", resolved)
+	if err != nil {
+		return nil, fmt.Errorf("open db: %w", err)
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("enable foreign keys: %w", err)
+	}
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
+	return db, nil
 }
 
-export function migrate(db: Db): void {
-  db.exec(`
+func migrate(db *sql.DB) error {
+	ddl := `
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -104,21 +124,59 @@ CREATE TRIGGER IF NOT EXISTS reasoning_memories_au AFTER UPDATE ON reasoning_mem
   INSERT INTO reasoning_memories_fts(rowid, project_id, title, description, content, tags)
   VALUES (new.id, new.project_id, new.title, new.description, new.content, COALESCE(new.tags, ''));
 END;
-`);
+`
+	if _, err := db.Exec(ddl); err != nil {
+		return fmt.Errorf("create schema: %w", err)
+	}
 
-  ensureColumn(db, "reasoning_memories", "occurrences", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn(db, "reasoning_memories", "last_reinforced_at", "TEXT");
-  ensureColumn(db, "sessions", "namespace", "TEXT");
+	if err := ensureColumn(db, "reasoning_memories", "occurrences", "INTEGER NOT NULL DEFAULT 1"); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "reasoning_memories", "last_reinforced_at", "TEXT"); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "sessions", "namespace", "TEXT"); err != nil {
+		return err
+	}
 
-  db.exec(`
+	_, err := db.Exec(`
 INSERT INTO reasoning_memories_fts(rowid, project_id, title, description, content, tags)
 SELECT rm.id, rm.project_id, rm.title, rm.description, rm.content, COALESCE(rm.tags, '')
 FROM reasoning_memories rm
 WHERE NOT EXISTS (SELECT 1 FROM reasoning_memories_fts f WHERE f.rowid = rm.id);
-`);
+`)
+	if err != nil {
+		return fmt.Errorf("backfill fts: %w", err)
+	}
+	return nil
 }
 
-function ensureColumn(db: Db, table: string, column: string, definition: string): void {
-  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-  if (!columns.some((item) => item.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+func ensureColumn(db *sql.DB, table, column, definition string) error {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return fmt.Errorf("pragma table_info %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dfltValue sql.NullString
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return fmt.Errorf("scan pragma: %w", err)
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition))
+	if err != nil {
+		return fmt.Errorf("add column %s.%s: %w", table, column, err)
+	}
+	return nil
 }

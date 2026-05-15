@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -357,6 +358,203 @@ func TestWorkControlEntityTypesAreNotPartOfMemoryDetails(t *testing.T) {
 	_, err = store.getDetails("review", 1)
 	if err == nil {
 		t.Error("review should fail")
+	}
+}
+
+// graphInit returns a seeded store with project and session (no namespace).
+func graphInit(t *testing.T) (*MemoryStore, string, string) {
+	t.Helper()
+	store := newFixture(t)
+	dir := t.TempDir()
+	ctx, err := store.getStartupContext(dir, "concise")
+	if err != nil {
+		t.Fatalf("getStartupContext: %v", err)
+	}
+	pid := ctx["project"].(map[string]interface{})["id"].(string)
+	session, err := store.startSession(dir, ptr("test"), nil, false)
+	if err != nil {
+		t.Fatalf("startSession: %v", err)
+	}
+	sid := session["session"].(map[string]interface{})["id"].(string)
+	return store, pid, sid
+}
+
+func TestGraphLinkCreatesNodesAndEdges(t *testing.T) {
+	store := newFixture(t)
+	dir := t.TempDir()
+
+	ctx, err := store.getStartupContext(dir, "concise")
+	if err != nil {
+		t.Fatalf("getStartupContext: %v", err)
+	}
+	pid := ctx["project"].(map[string]interface{})["id"].(string)
+
+	result, err := store.graphLink(pid, "Decision", "Use SQLite", nil, "File", "db/schema.sql", nil, "SUPPORTED_BY", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("graphLink: %v", err)
+	}
+	if result["status"] != "linked" {
+		t.Errorf("expected status linked, got %v", result["status"])
+	}
+	from := result["from"].(map[string]interface{})
+	to := result["to"].(map[string]interface{})
+	if from["type"] != "Decision" || from["label"] != "Use SQLite" {
+		t.Errorf("from node: type=%v label=%v", from["type"], from["label"])
+	}
+	if to["type"] != "File" || to["label"] != "db/schema.sql" {
+		t.Errorf("to node: type=%v label=%v", to["type"], to["label"])
+	}
+	edge := result["edge"].(map[string]interface{})
+	if edge["relationship"] != "SUPPORTED_BY" {
+		t.Errorf("edge relationship: %v", edge["relationship"])
+	}
+}
+
+func TestGraphNeighborsReturnsBothDirections(t *testing.T) {
+	store := newFixture(t)
+	dir := t.TempDir()
+
+	ctx, err := store.getStartupContext(dir, "concise")
+	if err != nil {
+		t.Fatalf("getStartupContext: %v", err)
+	}
+	pid := ctx["project"].(map[string]interface{})["id"].(string)
+
+	link, err := store.graphLink(pid, "Feature", "auth", nil, "File", "auth/login.go", nil, "TOUCHED", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("graphLink 1: %v", err)
+	}
+	toId := int64(intVal(link["to"].(map[string]interface{}), "id"))
+
+	neighbors, err := store.graphNeighbors(toId, "both", nil)
+	if err != nil {
+		t.Fatalf("graphNeighbors: %v", err)
+	}
+	if neighbors["direction"] != "both" {
+		t.Errorf("direction: %v", neighbors["direction"])
+	}
+	nodes := neighbors["neighbors"].([]map[string]interface{})
+	if len(nodes) != 1 {
+		t.Errorf("expected 1 neighbor, got %d", len(nodes))
+	}
+	if nodes[0]["type"] != "Feature" {
+		t.Errorf("neighbor type: %v", nodes[0]["type"])
+	}
+}
+
+func TestGraphTraceFileLinksFeaturesAndEvidence(t *testing.T) {
+	store := newFixture(t)
+	dir := t.TempDir()
+
+	ctx, err := store.getStartupContext(dir, "concise")
+	if err != nil {
+		t.Fatalf("getStartupContext: %v", err)
+	}
+	pid := ctx["project"].(map[string]interface{})["id"].(string)
+
+	store.graphLink(pid, "Feature", "api", nil, "File", "server.go", nil, "TOUCHED", nil, nil, nil)
+	store.graphLink(pid, "Evidence", "profiling result", nil, "File", "server.go", nil, "SUPPORTED_BY", nil, nil, nil)
+
+	trace, err := store.graphTraceFile(pid, ptr("server.go"), nil)
+	if err != nil {
+		t.Fatalf("graphTraceFile: %v", err)
+	}
+	features := trace["features"].([]map[string]interface{})
+	if len(features) != 1 || features[0]["label"] != "api" {
+		t.Errorf("features: %v", features)
+	}
+	evidence := trace["evidence"].([]map[string]interface{})
+	if len(evidence) != 1 || evidence[0]["label"] != "profiling result" {
+		t.Errorf("evidence: %v", evidence)
+	}
+}
+
+func TestGraphFindRelatedLessonsViaDerivedFrom(t *testing.T) {
+	store := newFixture(t)
+	dir := t.TempDir()
+
+	ctx, err := store.getStartupContext(dir, "concise")
+	if err != nil {
+		t.Fatalf("getStartupContext: %v", err)
+	}
+	pid := ctx["project"].(map[string]interface{})["id"].(string)
+
+	store.graphLink(pid, "Lesson", "Keep it simple", nil, "Feature", "refactor", nil, "DERIVED_FROM", nil, nil, nil)
+
+	result, err := store.graphFindRelatedLessons(pid, ptr("refactor"), nil, nil)
+	if err != nil {
+		t.Fatalf("graphFindRelatedLessons: %v", err)
+	}
+	lessons := result["lessons"].([]map[string]interface{})
+	if len(lessons) != 1 || lessons[0]["label"] != "Keep it simple" {
+		t.Errorf("lessons: %v", lessons)
+	}
+}
+
+func TestGraphAutoLinkOnLogEventFileChanged(t *testing.T) {
+	store := newFixture(t)
+	dir := t.TempDir()
+
+	session, err := store.startSession(dir, ptr("test"), nil, false)
+	if err != nil {
+		t.Fatalf("startSession: %v", err)
+	}
+	sid := session["session"].(map[string]interface{})["id"].(string)
+	pid := session["session"].(map[string]interface{})["project_id"].(string)
+
+	_, err = store.logEvent(sid, "file_changed", "edited src/main.go", []string{"src/main.go"})
+	if err != nil {
+		t.Fatalf("logEvent: %v", err)
+	}
+
+	fileNode, err := store.graphFindFileNode(pid, "src/main.go")
+	if err != nil {
+		t.Fatalf("graphFindFileNode: %v", err)
+	}
+	if fileNode["type"] != "File" || fileNode["label"] != "src/main.go" {
+		t.Errorf("file node: type=%v label=%v", fileNode["type"], fileNode["label"])
+	}
+}
+
+func TestGraphAutoLinkOnLogDecisionCreatesDecisionNode(t *testing.T) {
+	store, _, sid := graphInit(t)
+
+	result, err := store.logDecision(sid, "Adopt WAL mode", nil, nil, []string{"store/db.go"}, "high")
+	if err != nil {
+		t.Fatalf("logDecision: %v", err)
+	}
+	decisionId := intVal(result["decision"].(map[string]interface{}), "id")
+
+	node, err := store.queryRow(
+		"SELECT * FROM memory_graph_nodes WHERE type = 'Decision' AND entity_ref = ?",
+		fmt.Sprintf("decision:%d", decisionId),
+	)
+	if err != nil || node == nil {
+		t.Fatal("expected Decision graph node after logDecision")
+	}
+	if node["type"] != "Decision" || !strings.Contains(strVal(node, "label"), "Adopt WAL mode") {
+		t.Errorf("decision node: type=%v label=%v", node["type"], node["label"])
+	}
+}
+
+func TestGraphAutoLinkOnAddLessonCreatesLessonNode(t *testing.T) {
+	store, pid, sid := graphInit(t)
+
+	result, err := store.addLesson(pid, "Test before commit", "Always run tests", "gates quality", sid, nil, "observed", []string{"testing", "ci"}, nil)
+	if err != nil {
+		t.Fatalf("addLesson: %v", err)
+	}
+	lessonId := intVal(result["lesson"].(map[string]interface{}), "id")
+
+	node, err := store.queryRow(
+		"SELECT * FROM memory_graph_nodes WHERE type = 'Lesson' AND entity_ref = ?",
+		fmt.Sprintf("lesson:%d", lessonId),
+	)
+	if err != nil || node == nil {
+		t.Fatal("expected Lesson graph node after addLesson")
+	}
+	if node["type"] != "Lesson" || node["label"] != "Test before commit" {
+		t.Errorf("lesson node: type=%v label=%v", node["type"], node["label"])
 	}
 }
 

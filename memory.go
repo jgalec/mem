@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/jgalec/mem/runtime"
 )
 
 type MemoryError struct{ msg string }
@@ -16,16 +19,26 @@ type MemoryError struct{ msg string }
 func (e *MemoryError) Error() string { return e.msg }
 
 type MemoryStore struct {
-	db        *sql.DB
-	readonly  bool
+	db      *sql.DB
+	readonly bool
 	projectId string
+	rt      *runtime.Runtime
 }
 
 func newMemoryStore(db *sql.DB, options struct {
 	readonly  bool
 	projectId string
+	rt        *runtime.Runtime
 }) *MemoryStore {
-	return &MemoryStore{db: db, readonly: options.readonly, projectId: options.projectId}
+	return &MemoryStore{db: db, readonly: options.readonly, projectId: options.projectId, rt: options.rt}
+}
+
+func (s *MemoryStore) invalidateProject(pid string) {
+	if s.rt != nil {
+		s.rt.InvalidateStartupCache(pid)
+		s.rt.InvalidateRetrievalCache(pid)
+		s.rt.InvalidProjectSnapshots(pid)
+	}
 }
 
 func (s *MemoryStore) getStartupContext(projectPath string, responseFormat string) (map[string]interface{}, error) {
@@ -38,6 +51,14 @@ func (s *MemoryStore) getStartupContext(projectPath string, responseFormat strin
 	}
 
 	pid := project["id"].(string)
+	cacheKey := "startup_context:" + pid + ":" + responseFormat
+
+	if s.rt != nil {
+		if cached, ok := s.rt.StartupCache().Get(cacheKey); ok {
+			return cached, nil
+		}
+	}
+
 	activeSessions, _ := s.queryRows("SELECT id, agent_name, namespace, started_at FROM sessions WHERE project_id = ? AND status = 'active' ORDER BY started_at DESC LIMIT 3", pid)
 	recentDecisions, _ := s.queryRows("SELECT id, decision, confidence, created_at FROM decisions WHERE project_id = ? ORDER BY id DESC LIMIT 5", pid)
 	relevantLessons, _ := s.queryRows("SELECT id, title, description, status, tags, confidence, occurrences, last_reinforced_at FROM reasoning_memories WHERE project_id = ? AND status != 'archived' ORDER BY last_used_at DESC, occurrences DESC, id DESC LIMIT 5", pid)
@@ -58,6 +79,14 @@ func (s *MemoryStore) getStartupContext(projectPath string, responseFormat strin
 		result["next_step"] = "Continue with an active session or start a new one if this is a separate work turn."
 	} else {
 		result["next_step"] = "Start a memory session before writing events, decisions, or lessons."
+	}
+
+	if s.rt != nil {
+		s.rt.StartupCache().Set(cacheKey, result)
+		snapshotKey, _ := s.rt.StoreSnapshot(pid, result)
+		if snapshotKey != "" {
+			result["snapshot_key"] = snapshotKey
+		}
 	}
 	return result, nil
 }
@@ -102,6 +131,15 @@ func (s *MemoryStore) startSession(projectPath string, agentName *string, namesp
 		"id": id, "project_id": pid, "agent_name": ag, "namespace": ns,
 		"status": "active", "summary": nil, "started_at": now, "closed_at": nil,
 	}
+	s.invalidateProject(pid)
+	if s.rt != nil {
+		s.rt.ClearSessionState(id)
+		wc := &runtime.WorkingContext{
+			Summary:  "Session started.",
+			UpdatedAt: time.Now().UTC(),
+		}
+		s.rt.SetWorkingContext(id, wc)
+	}
 	return map[string]interface{}{"session": session, "continued": false}, nil
 }
 
@@ -130,6 +168,10 @@ func (s *MemoryStore) closeSession(sessionId string, summary *string) (map[strin
 	s.insertEvent(session["project_id"].(string), sessionId, "closed", redact(rawSummary), nil)
 
 	details, _ := s.getDetails("session", sessionId)
+	s.invalidateProject(session["project_id"].(string))
+	if s.rt != nil {
+		s.rt.ClearSessionState(sessionId)
+	}
 	return map[string]interface{}{
 		"session": details,
 		"note":    "Session closed. Start a new session for further memory writes.",
@@ -148,6 +190,17 @@ func (s *MemoryStore) logEvent(sessionId string, kind string, content string, ev
 		kind = "note"
 	}
 	id := s.insertEvent(session["project_id"].(string), sessionId, kind, redact(content), evidenceRefs)
+	s.invalidateProject(session["project_id"].(string))
+	if s.rt != nil {
+		wc := s.rt.GetWorkingContext(sessionId)
+		if wc != nil {
+			wc.RecentActions = append(wc.RecentActions, kind)
+			if len(wc.RecentActions) > 20 {
+				wc.RecentActions = wc.RecentActions[len(wc.RecentActions)-20:]
+			}
+			s.rt.SetWorkingContext(sessionId, wc)
+		}
+	}
 	details, _ := s.getDetails("event", id)
 	return map[string]interface{}{"event": details}, nil
 }
@@ -182,6 +235,17 @@ func (s *MemoryStore) logDecision(sessionId string, decision string, rationale *
 	}
 
 	id, _ := result.LastInsertId()
+	s.invalidateProject(session["project_id"].(string))
+	if s.rt != nil {
+		wc := s.rt.GetWorkingContext(sessionId)
+		if wc != nil {
+			wc.RecentActions = append(wc.RecentActions, "decision:"+confidence)
+			if len(wc.RecentActions) > 20 {
+				wc.RecentActions = wc.RecentActions[len(wc.RecentActions)-20:]
+			}
+			s.rt.SetWorkingContext(sessionId, wc)
+		}
+	}
 	details, _ := s.getDetails("decision", id)
 	return map[string]interface{}{
 		"decision": details,
@@ -197,6 +261,15 @@ func (s *MemoryStore) searchLessons(projectId string, query string, tags []strin
 		limit = 20
 	}
 	query = strings.TrimSpace(strings.ToLower(query))
+
+	cacheKey := s.retrievalCacheKey(projectId, query, tags, limit, responseFormat)
+	if s.rt != nil {
+		if cached, ok := s.rt.RetrievalCache().Get(cacheKey); ok {
+			lessons := make([]map[string]interface{}, len(cached))
+			copy(lessons, cached)
+			return map[string]interface{}{"lessons": lessons, "cached": true}, nil
+		}
+	}
 
 	var rows []map[string]interface{}
 	var err error
@@ -244,7 +317,11 @@ func (s *MemoryStore) searchLessons(projectId string, query string, tags []strin
 
 	now := isoNow()
 	for _, item := range items {
-		s.db.Exec("UPDATE reasoning_memories SET last_used_at = ? WHERE id = ?", now, item.row["id"])
+		if s.rt != nil {
+			s.rt.EnqueueWrite("UPDATE reasoning_memories SET last_used_at = ? WHERE id = ?", now, item.row["id"])
+		} else {
+			s.db.Exec("UPDATE reasoning_memories SET last_used_at = ? WHERE id = ?", now, item.row["id"])
+		}
 	}
 
 	lessons := make([]map[string]interface{}, len(items))
@@ -254,6 +331,13 @@ func (s *MemoryStore) searchLessons(projectId string, query string, tags []strin
 		} else {
 			lessons[i] = compactLesson(item.row, item.score)
 		}
+	}
+
+	if s.rt != nil {
+		for _, item := range items {
+			s.rt.HotLessons().AddFromRow(item.row)
+		}
+		s.rt.RetrievalCache().Set(cacheKey, lessons)
 	}
 	return map[string]interface{}{"lessons": lessons}, nil
 }
@@ -292,7 +376,11 @@ func (s *MemoryStore) addLesson(projectId string, title string, description stri
 	}
 
 	id, _ := result.LastInsertId()
+	s.invalidateProject(projectId)
 	details, _ := s.getDetails("lesson", id)
+	if s.rt != nil && details != nil {
+		s.rt.HotLessons().AddFromRow(details)
+	}
 	return map[string]interface{}{"lesson": details}, nil
 }
 
@@ -322,7 +410,11 @@ func (s *MemoryStore) reinforceLesson(lessonId int64, evidenceRefs []string) (ma
 		return nil, fmt.Errorf("reinforce lesson: %w", err)
 	}
 
+	s.invalidateProject(lesson["project_id"].(string))
 	details, _ := s.getDetails("lesson", lessonId)
+	if s.rt != nil && details != nil {
+		s.rt.HotLessons().AddFromRow(details)
+	}
 	return map[string]interface{}{"lesson": details}, nil
 }
 
@@ -416,6 +508,7 @@ func (s *MemoryStore) ensureProject(projectPath string) (map[string]interface{},
 		return nil, fmt.Errorf("ensure project: %w", err)
 	}
 
+	s.invalidateProject(pid)
 	return map[string]interface{}{
 		"id": pid, "name": name, "root_path": root,
 		"created_at": now, "updated_at": now,
@@ -451,6 +544,18 @@ func (s *MemoryStore) assertWritable() error {
 		return &MemoryError{"Mem is running in readonly mode. Recommended action: unset MEM_READONLY or use read-only tools only."}
 	}
 	return nil
+}
+
+func (s *MemoryStore) retrievalCacheKey(projectId, query string, tags []string, limit int, format string) string {
+	h := sha256.New()
+	h.Write([]byte(projectId))
+	h.Write([]byte(query))
+	for _, t := range tags {
+		h.Write([]byte(t))
+	}
+	h.Write([]byte(fmt.Sprintf("%d", limit)))
+	h.Write([]byte(format))
+	return projectId + ":" + hex.EncodeToString(h.Sum(nil))[:16]
 }
 
 func (s *MemoryStore) queryRow(query string, args ...interface{}) (map[string]interface{}, error) {

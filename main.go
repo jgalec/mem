@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jgalec/mem/runtime"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -20,12 +21,25 @@ func main() {
 	}
 	defer db.Close()
 
+	rt := runtime.New(runtime.DefaultConfig())
+	defer rt.Shutdown()
+
 	store := newMemoryStore(db, struct {
 		readonly  bool
 		projectId string
-	}{readonly: readonly, projectId: projectId})
+		rt        *runtime.Runtime
+	}{readonly: readonly, projectId: projectId, rt: rt})
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "mem", Version: "0.1.0"}, nil)
+	rt.SetOnFlush(func(ops []runtime.WriteOp) error {
+		for _, op := range ops {
+			if _, err := db.Exec(op.Query, op.Args...); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "mem", Version: "0.2.0"}, nil)
 	registerTools(server, store)
 
 	log.Println("mem running on stdio")

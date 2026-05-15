@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/jgalec/mem/runtime"
 )
 
 func newFixture(t *testing.T) *MemoryStore {
@@ -16,6 +18,7 @@ func newFixture(t *testing.T) *MemoryStore {
 	return newMemoryStore(db, struct {
 		readonly  bool
 		projectId string
+		rt        *runtime.Runtime
 	}{})
 }
 
@@ -338,6 +341,7 @@ func TestReadonlyModeRejectsWrites(t *testing.T) {
 	store := newMemoryStore(db, struct {
 		readonly  bool
 		projectId string
+		rt        *runtime.Runtime
 	}{readonly: true})
 
 	_, err = store.startSession(dir, nil, nil, false)

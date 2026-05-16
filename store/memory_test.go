@@ -247,10 +247,24 @@ func TestLessonConsolidationSuggestsPromotionAndRelated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("addLesson 2: %v", err)
 	}
-	_, err = store.addLesson(pid, "  small   changes ", "Same title after normalization", "Normalize whitespace and case", sid, nil, "observed", []string{"cleanup"}, nil)
+	_, err = store.addLesson(pid, "Prefers minimal changes", "Same intent different title", "Favor small edits across codebase", sid, nil, "observed", []string{"memory", "minimal"}, nil)
 	if err != nil {
 		t.Fatalf("addLesson 3: %v", err)
 	}
+
+	dupResult, err := store.addLesson(pid, "  small   changes ", "Duplicate title", "Auto-reinforce should catch this", sid, nil, "observed", []string{"cleanup"}, nil)
+	if err != nil {
+		t.Fatalf("addLesson 4: %v", err)
+	}
+	if dupResult["auto_reinforced"] != true {
+		t.Error("expected auto_reinforced for duplicate title")
+	}
+
+	rawJSON := "[]"
+	store.db.Exec(
+		"INSERT INTO reasoning_memories (project_id, title, description, content, source_session_id, source_outcome, status, tags, confidence, occurrences, evidence_refs, failure_mode, created_at, last_reinforced_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1.0, 1, ?, NULL, ?, NULL, NULL)",
+		pid, "small changes", "dup", "dup", sid, nil, "observed", rawJSON, rawJSON, isoNow(),
+	)
 
 	store.reinforceLesson(firstId, nil)
 	store.reinforceLesson(firstId, nil)

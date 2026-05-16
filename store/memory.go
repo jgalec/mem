@@ -378,6 +378,25 @@ func (s *MemoryStore) addLesson(projectId string, title string, description stri
 	if err != nil || session == nil || session["project_id"] != projectId {
 		return nil, &MemoryError{"Cannot add lesson without a source_session_id from the same project. Recommended action: start a memory session and use it as the lesson source."}
 	}
+
+	normalizedTitle := normalizeTitle(title)
+	existing, _ := s.queryRows(
+		"SELECT id FROM reasoning_memories WHERE project_id = ? AND status != 'archived'",
+		projectId,
+	)
+	for _, row := range existing {
+		detail, err := s.getDetails("lesson", row["id"])
+		if err == nil && normalizeTitle(strVal(detail, "title")) == normalizedTitle {
+			result, err := s.reinforceLesson(int64(intVal(detail, "id")), evidenceRefs)
+			if err != nil {
+				return nil, err
+			}
+			result["auto_reinforced"] = true
+			result["matched_title"] = strVal(detail, "title")
+			return result, nil
+		}
+	}
+
 	if status == "" {
 		status = "observed"
 	}

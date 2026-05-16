@@ -128,6 +128,30 @@ func RegisterTools(server *mcp.Server, store *MemoryStore) {
 		return store.memStats(requireString(args, "project_id"))
 	}))
 
+	server.AddTool(&mcp.Tool{
+		Name:        "graph_trace_file",
+		Description: "Trace a file node in the memory graph to find related features, evidence, lessons, and commands.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"file_path":{"type":"string"},"node_id":{"type":"number"}},"required":["project_id"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.graphTraceFile(requireString(args, "project_id"), optString(args, "file_path"), optInt64Ptr(args, "node_id"))
+	}))
+
+	server.AddTool(&mcp.Tool{
+		Name:        "graph_trace_feature",
+		Description: "Trace a feature node in the memory graph to find related decisions, evidence, files, blockers, dependencies, and sessions.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"feature_label":{"type":"string"},"node_id":{"type":"number"}},"required":["project_id"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.graphTraceFeature(requireString(args, "project_id"), optString(args, "feature_label"), optInt64Ptr(args, "node_id"))
+	}))
+
+	server.AddTool(&mcp.Tool{
+		Name:        "graph_find_related_lessons",
+		Description: "Find lessons related to a feature, file, or graph node via DERIVED_FROM relationships.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"feature_label":{"type":"string"},"file_path":{"type":"string"},"node_id":{"type":"number"}},"required":["project_id"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.graphFindRelatedLessons(requireString(args, "project_id"), optString(args, "feature_label"), optString(args, "file_path"), optInt64Ptr(args, "node_id"))
+	}))
+
 }
 
 
@@ -224,6 +248,20 @@ func optInt64(args map[string]interface{}, key string, defaultVal int64) int64 {
 		return int64(f)
 	}
 	return defaultVal
+}
+
+func optInt64Ptr(args map[string]interface{}, key string) *int64 {
+	v, ok := args[key]
+	if !ok || v == nil {
+		return nil
+	}
+	var val int64
+	if f, ok := v.(float64); ok {
+		val = int64(f)
+	} else {
+		return nil
+	}
+	return &val
 }
 
 func getStringSlice(args map[string]interface{}, key string) []string {

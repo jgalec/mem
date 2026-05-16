@@ -43,6 +43,18 @@ func (s *MemoryStore) invalidateProject(pid string) {
 	}
 }
 
+func (s *MemoryStore) reinforceHotLessons(projectId string) {
+	if s.rt == nil {
+		return
+	}
+	top := s.rt.HotLessons().TopN(5)
+	for _, item := range top {
+		if item.Occurrences >= 2 {
+			s.reinforceLesson(item.ID, nil)
+		}
+	}
+}
+
 func (s *MemoryStore) getStartupContext(projectPath string, responseFormat string) (map[string]interface{}, error) {
 	project, err := s.ensureProject(projectPath)
 	if err != nil {
@@ -59,6 +71,7 @@ func (s *MemoryStore) getStartupContext(projectPath string, responseFormat strin
 		if cached, ok := s.rt.StartupCache().Get(cacheKey); ok {
 			return cached, nil
 		}
+		s.reinforceHotLessons(pid)
 	}
 
 	activeSessions, _ := s.queryRows("SELECT id, agent_name, namespace, started_at FROM sessions WHERE project_id = ? AND status = 'active' ORDER BY started_at DESC LIMIT 3", pid)

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -16,6 +17,15 @@ type TTLCache[K comparable, V any] struct {
 	ttl      time.Duration
 	stopCh   chan struct{}
 	stopOnce sync.Once
+	hits     atomic.Int64
+	misses   atomic.Int64
+}
+
+type CacheStats struct {
+	Size      int
+	Hits      int64
+	Misses    int64
+	HitRate   float64
 }
 
 func NewTTLCache[K comparable, V any](ttl time.Duration) *TTLCache[K, V] {
@@ -33,6 +43,7 @@ func (c *TTLCache[K, V]) Get(key K) (V, bool) {
 	entry, ok := c.entries[key]
 	c.mu.RUnlock()
 	if !ok || time.Now().After(entry.expires) {
+		c.misses.Add(1)
 		if ok {
 			c.mu.Lock()
 			delete(c.entries, key)
@@ -41,6 +52,7 @@ func (c *TTLCache[K, V]) Get(key K) (V, bool) {
 		var zero V
 		return zero, false
 	}
+	c.hits.Add(1)
 	return entry.value, true
 }
 
@@ -82,6 +94,22 @@ func (c *TTLCache[K, V]) Len() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.entries)
+}
+
+func (c *TTLCache[K, V]) Stats() CacheStats {
+	hits := c.hits.Load()
+	misses := c.misses.Load()
+	total := hits + misses
+	rate := 0.0
+	if total > 0 {
+		rate = float64(hits) / float64(total)
+	}
+	return CacheStats{
+		Size:    c.Len(),
+		Hits:    hits,
+		Misses:  misses,
+		HitRate: rate,
+	}
 }
 
 func (c *TTLCache[K, V]) Stop() {

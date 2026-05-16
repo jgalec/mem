@@ -614,14 +614,39 @@ func (s *MemoryStore) memStats(projectId string) (map[string]interface{}, error)
 	}
 
 	if s.rt != nil {
-		runtimeStats := map[string]interface{}{
-			"startup_cache_size":   s.rt.StartupCache().Len(),
-			"retrieval_cache_size": s.rt.RetrievalCache().Len(),
-			"hot_lessons":          s.rt.HotLessons().Len(),
-			"session_states":       s.rt.SessionState().Len(),
-			"snapshots":            len(s.rt.Snapshots()),
-			"write_queue_pending":  len(s.rt.WriteQueue()),
+		startupStats := s.rt.StartupCache().Stats()
+		retrievalStats := s.rt.RetrievalCache().Stats()
+		topHot := s.rt.HotLessons().TopN(5)
+		var topTitles []string
+		for _, item := range topHot {
+			topTitles = append(topTitles, item.Title)
 		}
+
+		runtimeStats := map[string]interface{}{
+			"startup_cache": map[string]interface{}{
+				"size":     startupStats.Size,
+				"hits":     startupStats.Hits,
+				"misses":   startupStats.Misses,
+				"hit_rate": startupStats.HitRate,
+			},
+			"retrieval_cache": map[string]interface{}{
+				"size":     retrievalStats.Size,
+				"hits":     retrievalStats.Hits,
+				"misses":   retrievalStats.Misses,
+				"hit_rate": retrievalStats.HitRate,
+			},
+			"hot_lessons":         s.rt.HotLessons().Len(),
+			"top_lessons":         topTitles,
+			"session_states":      s.rt.SessionState().Len(),
+			"snapshots":           len(s.rt.Snapshots()),
+			"write_queue_pending": len(s.rt.WriteQueue()),
+		}
+
+		var walPages int
+		if err := s.db.QueryRow("PRAGMA wal_checkpoint").Scan(&walPages, new(int), new(int)); err == nil {
+			runtimeStats["wal_pages"] = walPages
+		}
+
 		result["runtime"] = runtimeStats
 	}
 

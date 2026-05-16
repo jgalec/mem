@@ -37,9 +37,9 @@ func RegisterTools(server *mcp.Server, store *MemoryStore) {
 	server.AddTool(&mcp.Tool{
 		Name:        "get_details",
 		Description: "Get details for one memory entity by id: event, decision, lesson, or session.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"entity_type":{"type":"string","enum":["event","decision","lesson","session"]},"id":{"type":"string"}},"required":["entity_type","id"]}`),
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"entity_type":{"type":"string","enum":["event","decision","lesson","session"]},"id":{"type":["string","number"]}},"required":["entity_type","id"]}`),
 	}, h(func(args map[string]interface{}) (interface{}, error) {
-		return store.getDetails(requireString(args, "entity_type"), requireString(args, "id"))
+		return store.getDetails(requireString(args, "entity_type"), getDetailId(args))
 	}))
 
 	server.AddTool(&mcp.Tool{
@@ -234,4 +234,18 @@ func getStringSlice(args map[string]interface{}, key string) []string {
 		}
 	}
 	return result
+}
+
+func getDetailId(args map[string]interface{}) interface{} {
+	v, ok := args["id"]
+	if !ok || v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	if f, ok := v.(float64); ok {
+		return int64(f)
+	}
+	return ""
 }

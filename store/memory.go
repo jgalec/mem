@@ -503,6 +503,49 @@ func (s *MemoryStore) consolidateLessons(projectId string, dryRun bool) (map[str
 	}, nil
 }
 
+func (s *MemoryStore) memStats(projectId string) (map[string]interface{}, error) {
+	dbStats := make(map[string]interface{})
+
+	var count int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE project_id = ?", projectId).Scan(&count); err == nil {
+		dbStats["sessions"] = count
+	}
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM events WHERE project_id = ?", projectId).Scan(&count); err == nil {
+		dbStats["events"] = count
+	}
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM decisions WHERE project_id = ?", projectId).Scan(&count); err == nil {
+		dbStats["decisions"] = count
+	}
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM reasoning_memories WHERE project_id = ?", projectId).Scan(&count); err == nil {
+		dbStats["lessons"] = count
+	}
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM memory_graph_nodes WHERE project_id = ?", projectId).Scan(&count); err == nil {
+		dbStats["graph_nodes"] = count
+	}
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM memory_graph_edges WHERE project_id = ?", projectId).Scan(&count); err == nil {
+		dbStats["graph_edges"] = count
+	}
+
+	result := map[string]interface{}{
+		"project_id": projectId,
+		"db":         dbStats,
+	}
+
+	if s.rt != nil {
+		runtimeStats := map[string]interface{}{
+			"startup_cache_size":   s.rt.StartupCache().Len(),
+			"retrieval_cache_size": s.rt.RetrievalCache().Len(),
+			"hot_lessons":          s.rt.HotLessons().Len(),
+			"session_states":       s.rt.SessionState().Len(),
+			"snapshots":            len(s.rt.Snapshots()),
+			"write_queue_pending":  len(s.rt.WriteQueue()),
+		}
+		result["runtime"] = runtimeStats
+	}
+
+	return result, nil
+}
+
 func (s *MemoryStore) ensureProject(projectPath string) (map[string]interface{}, error) {
 	root, err := filepath.Abs(projectPath)
 	if err != nil {

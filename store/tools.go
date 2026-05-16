@@ -112,6 +112,14 @@ func RegisterTools(server *mcp.Server, store *MemoryStore) {
 		return store.startSession(requireString(args, "project_path"), optString(args, "agent_name"), optString(args, "namespace"), optBool(args, "continue_existing", false))
 	}))
 
+	server.AddTool(&mcp.Tool{
+		Name:        "stats",
+		Description: "Get memory statistics: entity counts, graph size, runtime cache health.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"}},"required":["project_id"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.memStats(requireString(args, "project_id"))
+	}))
+
 }
 
 

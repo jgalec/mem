@@ -157,6 +157,9 @@ func (s *MemoryStore) closeSession(sessionId string, summary *string) (map[strin
 	if err != nil {
 		return nil, err
 	}
+	if s.rt != nil {
+		s.rt.DrainWriteQueue()
+	}
 	now := isoNow()
 
 	var sum interface{} = nil

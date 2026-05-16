@@ -58,20 +58,20 @@ Add mem to your MCP client configuration:
 }
 ```
 
-On first use, your AI agent calls `memory_get_startup_context` with a `project_path`. mem creates the project and database automatically — no setup required.
+On first use, your AI agent calls `mem_get_startup_context` with a `project_path`. mem creates the project and database automatically — no setup required.
 
 ---
 
 ## Recommended Flow
 
-1. **`memory_get_startup_context`** — retrieve or initialize project memory
-2. **`memory_start_session`** — open a new memory session (optionally with a `namespace`)
-3. **`memory_log_event`** — record notes, file changes, test runs, or blockers
-4. **`memory_log_decision`** — persist technical decisions with rationale
-5. **`memory_search_lessons`** — find relevant lessons by keyword or tag
-6. **`memory_add_lesson`** — store a reusable lesson tied to the source session
-7. **`memory_reinforce_lesson`** — boost an existing lesson instead of duplicating
-8. **`memory_close_session`** — close the session with an optional summary
+1. **`mem_get_startup_context`** — retrieve or initialize project memory
+2. **`mem_start_session`** — open a new memory session (optionally with a `namespace`)
+3. **`mem_log_event`** — record notes, file changes, test runs, or blockers
+4. **`mem_log_decision`** — persist technical decisions with rationale
+5. **`mem_search_lessons`** — find relevant lessons by keyword or tag
+6. **`mem_add_lesson`** — store a reusable lesson tied to the source session
+7. **`mem_reinforce_lesson`** — boost an existing lesson instead of duplicating
+8. **`mem_close_session`** — close the session with an optional summary
 
 ---
 
@@ -79,16 +79,16 @@ On first use, your AI agent calls `memory_get_startup_context` with a `project_p
 
 | Tool | Description |
 |------|-------------|
-| `memory_get_startup_context` | Get project snapshot: active sessions, decisions, lessons, graph context |
-| `memory_start_session` | Create a memory session for a project |
-| `memory_close_session` | Close an active session with optional summary |
-| `memory_log_event` | Record an event (note, progress, file change, test run, blocker, etc.) |
-| `memory_log_decision` | Log a technical decision with rationale and evidence |
-| `memory_search_lessons` | Full-text search lessons with tag and status scoring |
-| `memory_add_lesson` | Store a reusable strategic lesson |
-| `memory_reinforce_lesson` | Boost an existing lesson's confidence and occurrences |
-| `memory_get_details` | Retrieve full details for an event, decision, lesson, or session |
-| `memory_consolidate_lessons` | Get suggestions for merging duplicates or promoting lessons |
+| `mem_get_startup_context` | Get project snapshot: active sessions, decisions, lessons, graph context |
+| `mem_start_session` | Create a memory session for a project |
+| `mem_close_session` | Close an active session with optional summary |
+| `mem_log_event` | Record an event (note, progress, file change, test run, blocker, etc.) |
+| `mem_log_decision` | Log a technical decision with rationale and evidence |
+| `mem_search_lessons` | Full-text search lessons with tag and status scoring |
+| `mem_add_lesson` | Store a reusable strategic lesson |
+| `mem_reinforce_lesson` | Boost an existing lesson's confidence and occurrences |
+| `mem_get_details` | Retrieve full details for an event, decision, lesson, or session |
+| `mem_consolidate_lessons` | Get suggestions for merging duplicates or promoting lessons |
 
 ---
 

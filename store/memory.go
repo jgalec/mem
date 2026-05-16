@@ -565,6 +565,43 @@ func (s *MemoryStore) memStats(projectId string) (map[string]interface{}, error)
 	return result, nil
 }
 
+func (s *MemoryStore) listSessions(projectId string, filter string) (map[string]interface{}, error) {
+	if filter == "" {
+		filter = "all"
+	}
+	if filter != "active" && filter != "closed" && filter != "all" {
+		return nil, &MemoryError{"filter must be 'active', 'closed', or 'all'."}
+	}
+
+	var where string
+	var args []interface{}
+	args = append(args, projectId)
+	if filter != "all" {
+		where = " AND status = ?"
+		args = append(args, filter)
+	}
+
+	var activeCount, closedCount int
+	s.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE project_id = ? AND status = 'active'", projectId).Scan(&activeCount)
+	s.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE project_id = ? AND status = 'closed'", projectId).Scan(&closedCount)
+
+	sessions, err := s.queryRows(
+		"SELECT id, agent_name, namespace, status, summary, started_at, closed_at FROM sessions WHERE project_id = ?"+where+" ORDER BY started_at DESC LIMIT 50",
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"sessions":      sessions,
+		"total":         len(sessions),
+		"active_count":  activeCount,
+		"closed_count":  closedCount,
+		"filter":        filter,
+	}, nil
+}
+
 func (s *MemoryStore) ensureProject(projectPath string) (map[string]interface{}, error) {
 	root, err := filepath.Abs(projectPath)
 	if err != nil {

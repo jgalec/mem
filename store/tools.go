@@ -113,6 +113,14 @@ func RegisterTools(server *mcp.Server, store *MemoryStore) {
 	}))
 
 	server.AddTool(&mcp.Tool{
+		Name:        "list_sessions",
+		Description: "List sessions for a project. Filter by active, closed, or all. Returns counts and session metadata.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"filter":{"type":"string","enum":["active","closed","all"],"default":"all"}},"required":["project_id"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		return store.listSessions(requireString(args, "project_id"), optStringDefault(args, "filter", "all"))
+	}))
+
+	server.AddTool(&mcp.Tool{
 		Name:        "stats",
 		Description: "Get memory statistics: entity counts, graph size, runtime cache health.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"}},"required":["project_id"]}`),

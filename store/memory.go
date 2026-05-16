@@ -182,6 +182,7 @@ func (s *MemoryStore) closeSession(sessionId string, summary *string) (map[strin
 	if s.rt != nil {
 		s.rt.ClearSessionState(sessionId)
 	}
+	s.checkpointWAL()
 	return map[string]interface{}{
 		"session": details,
 		"note":    "Session closed. Start a new session for further memory writes.",
@@ -545,6 +546,10 @@ func (s *MemoryStore) projectRootPath(projectId string) string {
 		return ""
 	}
 	return strVal(row, "root_path")
+}
+
+func (s *MemoryStore) checkpointWAL() {
+	s.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
 }
 
 func (s *MemoryStore) requireSession(sessionId string) (map[string]interface{}, error) {

@@ -34,6 +34,10 @@ func OpenMemoryDb(dbPath string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("set busy timeout: %w", err)
 	}
+	if _, err := db.Exec("PRAGMA wal_autocheckpoint = 100"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("set wal autocheckpoint: %w", err)
+	}
 	if err := migrate(db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)

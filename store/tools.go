@@ -83,6 +83,28 @@ func RegisterTools(server *mcp.Server, store *MemoryStore) {
 	}))
 
 	server.AddTool(&mcp.Tool{
+		Name:        "json_query",
+		Description: "Query memory entities (events, decisions, lessons, sessions) using structured JSON criteria. Supports filters, logical OR/NOT, pagination, and ordering.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_id":{"type":"string"},"criteria":{"type":"object"}},"required":["project_id","criteria"]}`),
+	}, h(func(args map[string]interface{}) (interface{}, error) {
+		raw := args["criteria"]
+		var rawJSON json.RawMessage
+		switch v := raw.(type) {
+		case json.RawMessage:
+			rawJSON = v
+		case string:
+			rawJSON = json.RawMessage(v)
+		default:
+			b, err := json.Marshal(v)
+			if err != nil {
+				return nil, err
+			}
+			rawJSON = json.RawMessage(b)
+		}
+		return store.jsonQuery(requireString(args, "project_id"), rawJSON)
+	}))
+
+	server.AddTool(&mcp.Tool{
 		Name:        "start_session",
 		Description: "Create a memory session for a project. Pass continue_existing=true only when intentionally resuming the latest active session.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"project_path":{"type":"string"},"agent_name":{"type":"string"},"namespace":{"type":"string"},"continue_existing":{"type":"boolean","default":false}},"required":["project_path"]}`),

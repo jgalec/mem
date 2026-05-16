@@ -16,7 +16,7 @@ func (s *MemoryStore) graphAutoLinkFeatureFromNamespace(projectId string, sessio
 }
 
 func (s *MemoryStore) graphAutoLinkFileChanges(projectId string, sessionId string, content string, evidenceRefs []string) {
-	files := s.graphExtractFilePaths(content, evidenceRefs)
+	files := s.graphExtractFilePaths(projectId, content, evidenceRefs)
 	if len(files) == 0 {
 		return
 	}
@@ -98,18 +98,19 @@ func (s *MemoryStore) graphFindFeatureForSession(projectId string, sessionId str
 	return strVal(node, "label")
 }
 
-func (s *MemoryStore) graphExtractFilePaths(content string, evidenceRefs []string) []string {
+func (s *MemoryStore) graphExtractFilePaths(projectId string, content string, evidenceRefs []string) []string {
+	rootPath := s.projectRootPath(projectId)
 	seen := make(map[string]bool)
 	var files []string
 	for _, match := range pathExtRe.FindAllString(content, -1) {
-		cleaned := s.graphCleanPath(match)
+		cleaned := s.graphCleanPath(match, rootPath)
 		if cleaned != "" && !seen[cleaned] {
 			seen[cleaned] = true
 			files = append(files, cleaned)
 		}
 	}
 	for _, ref := range evidenceRefs {
-		cleaned := s.graphCleanPath(ref)
+		cleaned := s.graphCleanPath(ref, rootPath)
 		if cleaned != "" && !seen[cleaned] {
 			if pathExtRe.MatchString(cleaned) {
 				seen[cleaned] = true
@@ -120,9 +121,14 @@ func (s *MemoryStore) graphExtractFilePaths(content string, evidenceRefs []strin
 	return files
 }
 
-func (s *MemoryStore) graphCleanPath(raw string) string {
+func (s *MemoryStore) graphCleanPath(raw string, rootPath string) string {
 	cleaned := strings.TrimSpace(raw)
 	cleaned = strings.ReplaceAll(cleaned, "\\", "/")
+	if rootPath != "" {
+		prefix := strings.ReplaceAll(rootPath, "\\", "/")
+		prefix = strings.TrimRight(prefix, "/") + "/"
+		cleaned = strings.TrimPrefix(cleaned, prefix)
+	}
 	cleaned = strings.TrimRight(cleaned, "/")
 	if cleaned == "" {
 		return ""

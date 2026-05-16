@@ -539,6 +539,14 @@ func (s *MemoryStore) ensureProject(projectPath string) (map[string]interface{},
 	}, nil
 }
 
+func (s *MemoryStore) projectRootPath(projectId string) string {
+	row, _ := s.queryRow("SELECT root_path FROM projects WHERE id = ?", projectId)
+	if row == nil {
+		return ""
+	}
+	return strVal(row, "root_path")
+}
+
 func (s *MemoryStore) requireSession(sessionId string) (map[string]interface{}, error) {
 	session, err := s.queryRow("SELECT * FROM sessions WHERE id = ?", sessionId)
 	if err != nil || session == nil {

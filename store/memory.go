@@ -482,21 +482,34 @@ func (s *MemoryStore) getDetails(entityType string, id interface{}) (map[string]
 }
 
 func (s *MemoryStore) consolidateLessons(projectId string, dryRun bool) (map[string]interface{}, error) {
-	if dryRun == false {
+	if err := s.assertWritable(); err != nil {
 		dryRun = true
 	}
 	rows, _ := s.queryRows("SELECT id, title, description, status, tags, occurrences FROM reasoning_memories WHERE project_id = ? AND status != 'archived' ORDER BY id DESC", projectId)
 
 	var suggestions []map[string]interface{}
+	seenMerge := make(map[int64]bool)
+
 	for i := 0; i < len(rows); i++ {
+		keepId := intVal(rows[i], "id")
 		for j := i + 1; j < len(rows); j++ {
+			candId := intVal(rows[j], "id")
+			if seenMerge[int64(candId)] {
+				continue
+			}
 			if normalizeTitle(strVal(rows[i], "title")) == normalizeTitle(strVal(rows[j], "title")) {
-				suggestions = append(suggestions, map[string]interface{}{
+				sug := map[string]interface{}{
 					"action":       "merge_or_archive_duplicate",
 					"keep_id":      rows[i]["id"],
 					"candidate_id": rows[j]["id"],
 					"reason":       "same normalized title",
-				})
+				}
+				suggestions = append(suggestions, sug)
+				if !dryRun {
+					s.mergeLessons(int64(keepId), int64(candId))
+					seenMerge[int64(candId)] = true
+					sug["executed"] = true
+				}
 			} else if tagOverlap(strVal(rows[i], "tags"), strVal(rows[j], "tags")) >= 2 {
 				suggestions = append(suggestions, map[string]interface{}{
 					"action":       "inspect_related_lessons",
@@ -506,20 +519,57 @@ func (s *MemoryStore) consolidateLessons(projectId string, dryRun bool) (map[str
 				})
 			}
 		}
-		if intVal(rows[i], "occurrences") >= 3 && strVal(rows[i], "status") != "consolidated" {
-			suggestions = append(suggestions, map[string]interface{}{
+		if !seenMerge[int64(keepId)] && intVal(rows[i], "occurrences") >= 3 && strVal(rows[i], "status") != "consolidated" {
+			sug := map[string]interface{}{
 				"action":    "promote_to_consolidated",
 				"lesson_id": rows[i]["id"],
 				"reason":    "reinforced at least 3 times",
-			})
+			}
+			suggestions = append(suggestions, sug)
+			if !dryRun {
+				s.db.Exec("UPDATE reasoning_memories SET status = 'consolidated' WHERE id = ?", keepId)
+				sug["executed"] = true
+			}
 		}
+	}
+
+	s.invalidateProject(projectId)
+
+	note := "MVP returns suggestions only and does not modify data."
+	if !dryRun {
+		note = "Consolidation executed: duplicates merged, eligible lessons promoted."
 	}
 
 	return map[string]interface{}{
 		"dry_run":     dryRun,
 		"suggestions": suggestions,
-		"note":        "MVP returns suggestions only and does not modify data.",
+		"note":        note,
 	}, nil
+}
+
+func (s *MemoryStore) mergeLessons(keepId, candidateId int64) {
+	keep, _ := s.getDetails("lesson", keepId)
+	cand, _ := s.getDetails("lesson", candidateId)
+	if keep == nil || cand == nil {
+		return
+	}
+
+	keepTags := toStringSlice(keep, "tags")
+	candTags := toStringSlice(cand, "tags")
+	mergedTags := mergeStrings(keepTags, candTags)
+
+	keepRefs := toStringSlice(keep, "evidence_refs")
+	candRefs := toStringSlice(cand, "evidence_refs")
+	mergedRefs := mergeStrings(keepRefs, candRefs)
+
+	tagsJSON, _ := json.Marshal(mergedTags)
+	refsJSON, _ := json.Marshal(mergedRefs)
+
+	s.db.Exec(
+		"UPDATE reasoning_memories SET occurrences = occurrences + ?, evidence_refs = ?, tags = ?, last_used_at = ? WHERE id = ?",
+		intVal(cand, "occurrences"), string(refsJSON), string(tagsJSON), isoNow(), keepId,
+	)
+	s.db.Exec("UPDATE reasoning_memories SET status = 'archived' WHERE id = ?", candidateId)
 }
 
 func (s *MemoryStore) memStats(projectId string) (map[string]interface{}, error) {

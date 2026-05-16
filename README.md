@@ -108,12 +108,17 @@ On first use, your AI agent calls `mem_get_startup_context` with a `project_path
 mem/
 ├── main.go              # Entry point, MCP server setup
 ├── store/               # Core memory logic
-│   ├── db.go            # Database connection, migrations, schema
-│   ├── memory.go        # MemoryStore: CRUD for all entity types
-│   ├── graph.go         # Graph layer: nodes, edges, auto-linking
-│   ├── helpers.go       # Scoring, redaction, normalization, utilities
-│   ├── tools.go         # MCP tool registration and argument parsing
-│   └── memory_test.go   # Integration tests
+│   ├── db.go                # Database connection, migrations, schema
+│   ├── memory.go            # MemoryStore: CRUD for all entity types
+│   ├── helpers.go           # Scoring, redaction, normalization, utilities
+│   ├── tools.go             # MCP tool registration and argument parsing
+│   ├── graph_types.go       # Valid node types and relationships
+│   ├── graph_node.go        # Node CRUD: upsert, get, resolve, find, fetch
+│   ├── graph_edge.go        # Edge CRUD: create, query, filter by type
+│   ├── graph_link.go        # Link and batch link with validation
+│   ├── graph_traverse.go    # Traversal: neighbors, trace, related lessons
+│   ├── graph_auto_link.go   # Auto-linking, startup context, path extraction
+│   └── memory_test.go       # Integration tests
 ├── runtime/             # Hot memory and caching layer
 │   ├── cache.go         # Generic TTL cache
 │   ├── hot.go           # Hot lessons tracking

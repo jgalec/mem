@@ -523,7 +523,7 @@ func (s *MemoryStore) consolidateLessons(projectId string, dryRun bool) (map[str
 					seenMerge[int64(candId)] = true
 					sug["executed"] = true
 				}
-			} else if tagOverlap(strVal(rows[i], "tags"), strVal(rows[j], "tags")) >= 2 {
+			} else if tagOverlap(strVal(rows[i], "tags"), strVal(rows[j], "tags")) >= 3 {
 				suggestions = append(suggestions, map[string]interface{}{
 					"action":       "inspect_related_lessons",
 					"keep_id":      rows[i]["id"],
@@ -548,7 +548,11 @@ func (s *MemoryStore) consolidateLessons(projectId string, dryRun bool) (map[str
 
 	s.invalidateProject(projectId)
 
-	note := "MVP returns suggestions only and does not modify data."
+	if len(suggestions) > 20 {
+		suggestions = suggestions[:20]
+	}
+
+	note := "Returns suggestions only and does not modify data."
 	if !dryRun {
 		note = "Consolidation executed: duplicates merged, eligible lessons promoted."
 	}

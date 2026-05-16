@@ -237,17 +237,17 @@ func TestLessonConsolidationSuggestsPromotionAndRelated(t *testing.T) {
 	}
 	sid := session["session"].(map[string]interface{})["id"].(string)
 
-	first, err := store.addLesson(pid, "Small changes", "Prefer minimal edits", "Avoid broad rewrites", sid, nil, "observed", []string{"memory", "minimal"}, nil)
+	first, err := store.addLesson(pid, "Small changes", "Prefer minimal edits", "Avoid broad rewrites", sid, nil, "observed", []string{"memory", "minimal", "go"}, nil)
 	if err != nil {
 		t.Fatalf("addLesson 1: %v", err)
 	}
 	firstId := first["lesson"].(map[string]interface{})["id"].(int64)
 
-	_, err = store.addLesson(pid, "Minimal memory", "Keep memory small", "Add only memory that changes future behavior", sid, nil, "observed", []string{"memory", "minimal"}, nil)
+	_, err = store.addLesson(pid, "Minimal memory", "Keep memory small", "Add only memory that changes future behavior", sid, nil, "observed", []string{"memory", "minimal", "go"}, nil)
 	if err != nil {
 		t.Fatalf("addLesson 2: %v", err)
 	}
-	_, err = store.addLesson(pid, "Prefers minimal changes", "Same intent different title", "Favor small edits across codebase", sid, nil, "observed", []string{"memory", "minimal"}, nil)
+	_, err = store.addLesson(pid, "Prefers minimal changes", "Same intent different title", "Favor small edits across codebase", sid, nil, "observed", []string{"memory", "minimal", "go"}, nil)
 	if err != nil {
 		t.Fatalf("addLesson 3: %v", err)
 	}

@@ -35,3 +35,6 @@ build/
 # OpenCode
 opencode.json
 .secrets/
+
+# Agent stress test output
+tests/

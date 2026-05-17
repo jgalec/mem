@@ -18,8 +18,7 @@ type HotItem struct {
 }
 
 type hotEntry struct {
-	item  HotItem
-	index int
+	item HotItem
 }
 
 type HotTracker struct {

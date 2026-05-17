@@ -1,0 +1,251 @@
+# Go Documentation
+
+> Official documentation and learning resources for the Go programming language.
+
+## Overview
+
+Go is an open-source programming language focused on simplicity, performance, concurrency, and developer productivity.
+
+Key characteristics:
+
+* Compiled, statically typed language
+* Garbage collection
+* Concurrency primitives (goroutines and channels)
+* Fast compilation
+* Strong standard library
+* Modular package system
+
+Official site: https://go.dev
+
+---
+
+# Getting Started
+
+## Installation
+
+* https://go.dev/doc/install
+
+## Beginner Tutorials
+
+* https://go.dev/doc/tutorial/getting-started.html
+* https://go.dev/doc/tutorial/create-module.html
+* https://go.dev/doc/tutorial/workspaces.html
+* https://go.dev/doc/tutorial/web-service-gin.html
+* https://go.dev/doc/tutorial/generics.html
+* https://go.dev/doc/tutorial/fuzz.html
+
+## Introductory Learning
+
+* https://go.dev/tour/
+* https://go.dev/doc/articles/wiki/
+* https://go.dev/doc/code.html
+
+---
+
+# Core Language References
+
+## Official References
+
+* https://go.dev/ref/spec
+* https://go.dev/ref/mem
+* https://go.dev/doc/effective_go.html
+* https://go.dev/doc/faq
+
+## Tooling & Editors
+
+* https://go.dev/doc/editors.html
+* https://go.dev/gopls
+* https://go.dev/doc/diagnostics.html
+
+## Performance & Optimization
+
+* https://go.dev/doc/gc-guide
+* https://go.dev/doc/build-cover
+* https://go.dev/doc/pgo
+
+---
+
+# Standard Library & Commands
+
+## Standard Library
+
+* https://go.dev/pkg/
+
+## Command Documentation
+
+* https://go.dev/doc/cmd
+
+## Go Command
+
+* https://go.dev/doc/articles/go_command.html
+
+---
+
+# Modules & Dependency Management
+
+## Dependency Management
+
+* https://go.dev/doc/modules/managing-dependencies
+* https://go.dev/ref/mod
+* https://go.dev/doc/modules/gomod-ref
+
+## Module Development
+
+* https://go.dev/doc/modules/developing
+* https://go.dev/doc/modules/release-workflow
+* https://go.dev/doc/modules/managing-source
+* https://go.dev/doc/modules/layout
+* https://go.dev/doc/modules/major-version
+* https://go.dev/doc/modules/publishing
+* https://go.dev/doc/modules/version-numbers
+
+## Blog & Migration Guides
+
+* https://go.dev/blog/using-go-modules
+* https://go.dev/blog/migrating-to-go-modules
+* https://go.dev/blog/publishing-go-modules
+* https://go.dev/blog/v2-go-modules
+* https://go.dev/blog/module-compatibility
+
+---
+
+# Database Access
+
+## Tutorials & Guides
+
+* https://go.dev/doc/tutorial/database-access
+* https://go.dev/doc/database/index
+* https://go.dev/doc/database/open-handle
+* https://go.dev/doc/database/change-data
+* https://go.dev/doc/database/querying
+* https://go.dev/doc/database/prepared-statements
+* https://go.dev/doc/database/execute-transactions
+* https://go.dev/doc/database/cancel-operations
+* https://go.dev/doc/database/manage-connections
+* https://go.dev/doc/database/sql-injection
+
+---
+
+# Concurrency
+
+## Talks
+
+* https://www.youtube.com/watch?v=f6kdp27TYZs
+* https://www.youtube.com/watch?v=QDDwwePbDtw
+
+## Articles
+
+* https://go.dev/blog/go-concurrency-patterns-timing-out-and
+
+---
+
+# Reflection, Interfaces & Advanced Concepts
+
+* https://go.dev/blog/json-rpc-tale-of-interfaces
+* https://go.dev/blog/gos-declaration-syntax
+* https://go.dev/blog/defer-panic-and-recover
+* https://go.dev/blog/go-slices-usage-and-internals
+* https://go.dev/blog/gif-decoder-exercise-in-go-interfaces
+* https://go.dev/blog/error-handling-and-go
+* https://go.dev/blog/laws-of-reflection
+
+---
+
+# Serialization & Data Formats
+
+* https://go.dev/blog/json-and-go
+* https://go.dev/blog/gobs-of-data
+
+---
+
+# Images & Graphics
+
+* https://go.dev/blog/go-image-package
+* https://go.dev/blog/go-imagedraw-package
+
+---
+
+# Tooling & Debugging
+
+* https://go.dev/doc/comment
+* https://go.dev/doc/gdb
+* https://go.dev/doc/articles/race_detector.html
+* https://go.dev/doc/asm
+* https://go.dev/blog/c-go-cgo
+* https://go.dev/blog/profiling-go-programs
+* https://go.dev/blog/race-detector
+
+---
+
+# Codewalks
+
+* https://go.dev/doc/codewalk/functions
+* https://go.dev/doc/codewalk/markov
+* https://go.dev/doc/codewalk/sharemem
+
+---
+
+# Talks & Presentations
+
+* https://research.swtch.com/gotour
+* https://vimeo.com/53221560
+* https://go.dev/talks
+* https://go.dev/wiki/GoTalks
+
+---
+
+# Community & Wiki
+
+* https://go.dev/wiki
+* https://go.dev/wiki/Learn
+* https://go.dev/wiki/NonEnglish
+
+---
+
+# Contribution & Releases
+
+* https://go.dev/doc/contribute
+* https://go.dev/doc/devel/release.html
+
+---
+
+# Security & Testing
+
+* https://go.dev/security/fuzz
+
+---
+
+# Recommended Learning Path
+
+1. Install Go
+2. Complete "Tour of Go"
+3. Read "Effective Go"
+4. Learn modules and dependency management
+5. Practice building APIs and concurrent programs
+6. Explore profiling, debugging, and optimization tools
+7. Read standard library documentation regularly
+
+---
+
+# High-Value Resources
+
+## Must Read
+
+* https://go.dev/tour/
+* https://go.dev/doc/effective_go.html
+* https://go.dev/ref/spec
+* https://go.dev/pkg/
+
+## Must Watch
+
+* https://www.youtube.com/watch?v=f6kdp27TYZs
+* https://www.youtube.com/watch?v=QDDwwePbDtw
+
+## Essential Tools
+
+* `go`
+* `gopls`
+* `go test`
+* `go fmt`
+* `go vet`
+* `pprof`

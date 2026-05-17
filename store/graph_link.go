@@ -35,53 +35,6 @@ func (s *MemoryStore) graphLink(projectId string, fromType string, fromLabel str
 	}, nil
 }
 
-func (s *MemoryStore) graphBatchLink(links []map[string]interface{}) (map[string]interface{}, error) {
-	if err := s.assertWritable(); err != nil {
-		return nil, err
-	}
-	if len(links) == 0 {
-		return nil, &MemoryError{"batch_link requires at least one link."}
-	}
-
-	var results []map[string]interface{}
-	projectIds := make(map[string]bool)
-
-	for _, link := range links {
-		projectId := requireString(link, "project_id")
-		fromType := requireString(link, "from_type")
-		fromLabel := requireString(link, "from_label")
-		toType := requireString(link, "to_type")
-		toLabel := requireString(link, "to_label")
-		relationship := requireString(link, "relationship")
-
-		if projectId == "" || fromType == "" || fromLabel == "" || toType == "" || toLabel == "" || relationship == "" {
-			return nil, &MemoryError{"batch_link: each link requires project_id, from_type, from_label, to_type, to_label, relationship."}
-		}
-
-		fromEntityRef := optString(link, "from_entity_ref")
-		toEntityRef := optString(link, "to_entity_ref")
-		evidenceRefs := getStringSlice(link, "evidence_refs")
-		sourceSessionId := optString(link, "source_session_id")
-		sourceEntity := optString(link, "source_entity")
-
-		result, err := s.graphLink(projectId, fromType, fromLabel, fromEntityRef, toType, toLabel, toEntityRef, relationship, evidenceRefs, sourceSessionId, sourceEntity)
-		if err != nil {
-			return nil, &MemoryError{"batch_link failed at link " + fromLabel + " -> " + toLabel + ": " + err.Error()}
-		}
-		results = append(results, result)
-		projectIds[projectId] = true
-	}
-
-	for pid := range projectIds {
-		s.invalidateProject(pid)
-	}
-
-	return map[string]interface{}{
-		"links":  results,
-		"count":  len(results),
-	}, nil
-}
-
 func (s *MemoryStore) graphValidateProject(projectId string) error {
 	project, err := s.queryRow("SELECT id FROM projects WHERE id = ?", projectId)
 	if err != nil || project == nil {

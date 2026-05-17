@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -57,10 +58,13 @@ func (s *MemoryStore) reinforceHotLessons(projectId string) {
 
 func (s *MemoryStore) abandonStaleSessions(projectId string) {
 	cutoff := time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339)
-	s.db.Exec(
+	_, err := s.db.Exec(
 		"UPDATE sessions SET status = 'abandoned', closed_at = ? WHERE project_id = ? AND status = 'active' AND started_at < ?",
 		isoNow(), projectId, cutoff,
 	)
+	if err != nil {
+		log.Printf("abandonStaleSessions: %v", err)
+	}
 }
 
 func (s *MemoryStore) getStartupContext(projectPath string, responseFormat string) (map[string]interface{}, error) {
@@ -654,7 +658,7 @@ func (s *MemoryStore) memStats(projectId string) (map[string]interface{}, error)
 			"hot_lessons":         s.rt.HotLessons().Len(),
 			"top_lessons":         topTitles,
 			"session_states":      s.rt.SessionState().Len(),
-			"snapshots":           len(s.rt.Snapshots()),
+			"snapshots":           s.rt.SnapshotCount(),
 			"write_queue_pending": len(s.rt.WriteQueue()),
 		}
 

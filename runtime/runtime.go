@@ -69,7 +69,11 @@ func (r *Runtime) RetrievalCache() *TTLCache[string, []map[string]interface{}] {
 func (r *Runtime) HotLessons() *HotTracker                                   { return r.hotLessons }
 func (r *Runtime) SessionState() *TTLCache[string, map[string]interface{}]  { return r.sessionState }
 func (r *Runtime) Snapshots() map[string][]byte                              { return r.snapshots }
-func (r *Runtime) SnapshotMu() *sync.RWMutex                                 { return &r.snapshotMu }
+func (r *Runtime) SnapshotCount() int {
+	r.snapshotMu.RLock()
+	defer r.snapshotMu.RUnlock()
+	return len(r.snapshots)
+}
 
 func (r *Runtime) Shutdown() {
 	close(r.writeQueue)
@@ -87,8 +91,9 @@ func (r *Runtime) InvalidateStartupCache(projectId string) {
 }
 
 func (r *Runtime) InvalidateRetrievalCache(projectId string) {
+	prefix := projectId + ":"
 	r.retrievalCache.Invalidate(func(key string) bool {
-		return len(key) > len(projectId) && key[:len(projectId)] == projectId
+		return len(key) > len(prefix) && key[:len(prefix)] == prefix
 	})
 }
 

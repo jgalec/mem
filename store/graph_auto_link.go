@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -170,6 +171,6 @@ func (s *MemoryStore) graphUpdateSessionSummary(sessionId string, summary *strin
 	if summary == nil || *summary == "" {
 		return
 	}
-	meta := fmt.Sprintf(`{"summary": %q}`, *summary)
-	s.db.Exec("UPDATE memory_graph_nodes SET metadata_json = ? WHERE type = 'Session' AND label = ?", meta, sessionId)
+	meta, _ := json.Marshal(map[string]string{"summary": *summary})
+	s.db.Exec("UPDATE memory_graph_nodes SET metadata_json = ? WHERE type = 'Session' AND label = ?", string(meta), sessionId)
 }

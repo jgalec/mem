@@ -61,6 +61,6 @@ func (r *Runtime) GetTransientState(sessionId, stateKey string) (interface{}, bo
 func (r *Runtime) ClearSessionState(sessionId string) {
 	r.sessionState.Invalidate(func(key string) bool {
 		return strings.HasSuffix(key, ":"+sessionId) ||
-			(len(key) > 10+len(sessionId) && key[:10] == "transient:" && key[10:10+len(sessionId)] == sessionId)
+			strings.Contains(key, "transient:"+sessionId+":")
 	})
 }

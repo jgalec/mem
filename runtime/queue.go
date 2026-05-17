@@ -82,7 +82,10 @@ func (r *Runtime) executeBatch(batch []WriteOp) {
 
 	if len(realOps) > 0 {
 		var err error
-		if r.onFlush != nil {
+		if r.onFlush == nil {
+			err = fmt.Errorf("write queue: onFlush callback not set — %d ops dropped", len(realOps))
+			log.Print(err)
+		} else {
 			backoffs := []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond}
 			for attempt := 0; attempt <= len(backoffs); attempt++ {
 				err = r.onFlush(realOps)

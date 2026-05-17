@@ -222,7 +222,10 @@ func (s *MemoryStore) logEvent(sessionId string, kind string, content string, ev
 	if kind == "" {
 		kind = "note"
 	}
-	id := s.insertEvent(strVal(session, "project_id"), sessionId, kind, redact(content), evidenceRefs)
+	id, err := s.insertEvent(strVal(session, "project_id"), sessionId, kind, redact(content), evidenceRefs)
+	if err != nil {
+		return nil, err
+	}
 	pid := strVal(session, "project_id")
 	s.invalidateProject(pid)
 	if s.rt != nil {
@@ -763,17 +766,20 @@ func (s *MemoryStore) requireSession(sessionId string) (map[string]interface{}, 
 	return session, nil
 }
 
-func (s *MemoryStore) insertEvent(projectId string, sessionId string, kind string, content string, evidenceRefs []string) int64 {
+func (s *MemoryStore) insertEvent(projectId string, sessionId string, kind string, content string, evidenceRefs []string) (int64, error) {
 	evJSON, _ := json.Marshal(redactList(evidenceRefs))
 	result, err := s.db.Exec(
 		"INSERT INTO events (project_id, session_id, kind, content, evidence_refs, created_at) VALUES (?, ?, ?, ?, ?, ?)",
 		projectId, sessionId, kind, content, string(evJSON), isoNow(),
 	)
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("insert event: %w", err)
 	}
-	id, _ := result.LastInsertId()
-	return id
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("get event id: %w", err)
+	}
+	return id, nil
 }
 
 func (s *MemoryStore) assertWritable() error {

@@ -92,6 +92,3 @@ func (r *Runtime) InvalidateRetrievalCache(projectId string) {
 	})
 }
 
-func (r *Runtime) InvalidateRetrievalForKey(projectId, queryHash string) {
-	r.retrievalCache.Delete(projectId + ":" + queryHash)
-}

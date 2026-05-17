@@ -196,11 +196,11 @@ func (s *MemoryStore) closeSession(sessionId string, summary *string) (map[strin
 		return nil, fmt.Errorf("close session: %w", err)
 	}
 
-	s.insertEvent(session["project_id"].(string), sessionId, "closed", redact(rawSummary), nil)
+	s.insertEvent(strVal(session, "project_id"), sessionId, "closed", redact(rawSummary), nil)
 	s.graphUpdateSessionSummary(sessionId, summary)
 
 	details, _ := s.getDetails("session", sessionId)
-	s.invalidateProject(session["project_id"].(string))
+	s.invalidateProject(strVal(session, "project_id"))
 	if s.rt != nil {
 		s.rt.ClearSessionState(sessionId)
 	}
@@ -222,8 +222,8 @@ func (s *MemoryStore) logEvent(sessionId string, kind string, content string, ev
 	if kind == "" {
 		kind = "note"
 	}
-	id := s.insertEvent(session["project_id"].(string), sessionId, kind, redact(content), evidenceRefs)
-	pid := session["project_id"].(string)
+	id := s.insertEvent(strVal(session, "project_id"), sessionId, kind, redact(content), evidenceRefs)
+	pid := strVal(session, "project_id")
 	s.invalidateProject(pid)
 	if s.rt != nil {
 		wc := s.rt.GetWorkingContext(sessionId)
@@ -279,7 +279,7 @@ func (s *MemoryStore) logDecision(sessionId string, decision string, rationale *
 	}
 
 	id, _ := result.LastInsertId()
-	pid := session["project_id"].(string)
+	pid := strVal(session, "project_id")
 	s.graphAutoLinkDecision(pid, sessionId, id, decision, evidenceRefs)
 	s.invalidateProject(pid)
 	if s.rt != nil {
@@ -476,7 +476,7 @@ func (s *MemoryStore) reinforceLesson(lessonId int64, evidenceRefs []string) (ma
 		return nil, fmt.Errorf("reinforce lesson: %w", err)
 	}
 
-	s.invalidateProject(lesson["project_id"].(string))
+	s.invalidateProject(strVal(lesson, "project_id"))
 	details, _ := s.getDetails("lesson", lessonId)
 	if s.rt != nil && details != nil {
 		s.rt.HotLessons().AddFromRow(details)

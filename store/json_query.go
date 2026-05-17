@@ -74,15 +74,12 @@ func (s *MemoryStore) jsonQuery(projectId string, rawCriteria json.RawMessage) (
 
 	var conditions []string
 	var args []interface{}
-	argIdx := 1
 
-	if !hasProjectColumn(qc.Entity) {
-		conditions = append(conditions, "project_id = ?")
-		args = append(args, projectId)
-	}
+	conditions = append(conditions, "project_id = ?")
+	args = append(args, projectId)
 
 	for _, filter := range qc.Filters {
-		cond, condArgs, err := buildFilter(qc.Entity, cols, filter, &argIdx)
+		cond, condArgs, err := buildFilter(qc.Entity, cols, filter)
 		if err != nil {
 			return nil, err
 		}
@@ -103,10 +100,6 @@ func (s *MemoryStore) jsonQuery(projectId string, rawCriteria json.RawMessage) (
 	if qc.OrderBy != "" {
 		if !allowedOrderBy.MatchString(qc.OrderBy) {
 			return nil, &MemoryError{"Invalid order_by: " + qc.OrderBy}
-		}
-		parts := strings.Fields(strings.ToUpper(qc.OrderBy))
-		for i, p := range parts {
-			parts[i] = strings.ToLower(p)
 		}
 		orderClause = "ORDER BY " + qc.OrderBy
 	}
@@ -137,9 +130,9 @@ func (s *MemoryStore) jsonQuery(projectId string, rawCriteria json.RawMessage) (
 	}, nil
 }
 
-func buildFilter(entity string, cols []string, filter FilterClause, argIdx *int) (string, []interface{}, error) {
+func buildFilter(entity string, cols []string, filter FilterClause) (string, []interface{}, error) {
 	if filter.Not != nil {
-		inner, innerArgs, err := buildFilter(entity, cols, *filter.Not, argIdx)
+		inner, innerArgs, err := buildFilter(entity, cols, *filter.Not)
 		if err != nil {
 			return "", nil, err
 		}
@@ -150,7 +143,7 @@ func buildFilter(entity string, cols []string, filter FilterClause, argIdx *int)
 		var orParts []string
 		var orArgs []interface{}
 		for _, sub := range filter.Or {
-			subCond, subArgs, err := buildFilter(entity, cols, sub, argIdx)
+			subCond, subArgs, err := buildFilter(entity, cols, sub)
 			if err != nil {
 				return "", nil, err
 			}
@@ -187,7 +180,6 @@ func buildFilter(entity string, cols []string, filter FilterClause, argIdx *int)
 		if !ok || len(arr) != 2 {
 			return "", nil, &MemoryError{"'between' requires an array of exactly 2 values"}
 		}
-		*argIdx += 2
 		return filter.Field + " BETWEEN ? AND ?", []interface{}{arr[0], arr[1]}, nil
 	case "in":
 		arr, ok := filter.Value.([]interface{})
@@ -200,28 +192,20 @@ func buildFilter(entity string, cols []string, filter FilterClause, argIdx *int)
 			placeholders[i] = "?"
 			vals[i] = v
 		}
-		*argIdx += len(arr)
 		return filter.Field + " IN (" + strings.Join(placeholders, ", ") + ")", vals, nil
 	case "contains":
-		*argIdx++
 		return filter.Field + " LIKE ?", []interface{}{"%" + fmt.Sprint(filter.Value) + "%"}, nil
 	case "gt":
-		*argIdx++
 		return filter.Field + " > ?", []interface{}{filter.Value}, nil
 	case "gte":
-		*argIdx++
 		return filter.Field + " >= ?", []interface{}{filter.Value}, nil
 	case "lt":
-		*argIdx++
 		return filter.Field + " < ?", []interface{}{filter.Value}, nil
 	case "lte":
-		*argIdx++
 		return filter.Field + " <= ?", []interface{}{filter.Value}, nil
 	case "neq":
-		*argIdx++
 		return filter.Field + " != ?", []interface{}{filter.Value}, nil
 	default:
-		*argIdx++
 		return filter.Field + " = ?", []interface{}{filter.Value}, nil
 	}
 }
@@ -233,10 +217,6 @@ func isColumnAllowed(cols []string, field string) bool {
 		}
 	}
 	return false
-}
-
-func hasProjectColumn(entity string) bool {
-	return entity == "lessons" || entity == "decisions" || entity == "events"
 }
 
 

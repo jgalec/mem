@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"fmt"
 	"log"
 	"time"
 )
@@ -24,7 +25,9 @@ func (r *Runtime) EnqueueWrite(query string, args ...interface{}) <-chan error {
 	select {
 	case r.writeQueue <- WriteOp{Query: query, Args: args, Done: done}:
 	default:
-		go func() { done <- nil }()
+		err := fmt.Errorf("write queue full (%d ops pending)", len(r.writeQueue))
+		log.Printf("%v — dropping write: %s", err, query)
+		go func() { done <- err }()
 	}
 	return done
 }

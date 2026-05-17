@@ -80,7 +80,10 @@ func (r *Runtime) Shutdown() {
 }
 
 func (r *Runtime) InvalidateStartupCache(projectId string) {
-	r.startupCache.Delete("startup_context:" + projectId)
+	r.startupCache.Invalidate(func(key string) bool {
+		prefix := "startup_context:" + projectId
+		return len(key) >= len(prefix) && key[:len(prefix)] == prefix
+	})
 }
 
 func (r *Runtime) InvalidateRetrievalCache(projectId string) {

@@ -1,6 +1,9 @@
 package runtime
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type WorkingContext struct {
 	Summary       string
@@ -57,11 +60,7 @@ func (r *Runtime) GetTransientState(sessionId, stateKey string) (interface{}, bo
 
 func (r *Runtime) ClearSessionState(sessionId string) {
 	r.sessionState.Invalidate(func(key string) bool {
-		return len(key) > len(sessionId) && key[0:0] == key[0:0] &&
-			((len(key) > 7+len(sessionId) && key[:7] == "working" && key[8:8+len(sessionId)] == sessionId) ||
-				(len(key) > 5+len(sessionId) && key[:5] == "trans") ||
-				(len(key) > 4+len(sessionId) && key[:4] == "temp"))
+		return strings.HasSuffix(key, ":"+sessionId) ||
+			(len(key) > 10+len(sessionId) && key[:10] == "transient:" && key[10:10+len(sessionId)] == sessionId)
 	})
-	r.sessionState.Delete("working_context:" + sessionId)
-	r.sessionState.Delete("temp_summary:" + sessionId)
 }

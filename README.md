@@ -85,10 +85,16 @@ On first use, your AI agent calls `mem_get_startup_context` with a `project_path
 | `mem_log_event` | Record an event (note, progress, file change, test run, blocker, etc.) |
 | `mem_log_decision` | Log a technical decision with rationale and evidence |
 | `mem_search_lessons` | Full-text search lessons with tag and status scoring |
-| `mem_add_lesson` | Store a reusable strategic lesson |
+| `mem_add_lesson` | Store a reusable strategic lesson (auto-reinforces on title match) |
 | `mem_reinforce_lesson` | Boost an existing lesson's confidence and occurrences |
 | `mem_get_details` | Retrieve full details for an event, decision, lesson, or session |
-| `mem_consolidate_lessons` | Get suggestions for merging duplicates or promoting lessons |
+| `mem_consolidate_lessons` | Merge duplicates, promote lessons to consolidated (dry_run=false executes) |
+| `mem_json_query` | Query entities with structured JSON criteria: filters, OR/NOT, pagination |
+| `mem_stats` | Memory health: entity counts, graph size, cache hit rates, WAL status |
+| `mem_list_sessions` | List sessions: filter by active/closed/all with counts |
+| `mem_graph_trace_file` | Trace a file node to related features, evidence, lessons, commands |
+| `mem_graph_trace_feature` | Trace a feature to its decisions, evidence, files, blockers, sessions |
+| `mem_graph_find_related_lessons` | Find lessons related to a feature, file, or graph node |
 
 ---
 

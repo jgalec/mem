@@ -55,6 +55,14 @@ func (s *MemoryStore) reinforceHotLessons(projectId string) {
 	}
 }
 
+func (s *MemoryStore) abandonStaleSessions(projectId string) {
+	cutoff := time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339)
+	s.db.Exec(
+		"UPDATE sessions SET status = 'abandoned', closed_at = ? WHERE project_id = ? AND status = 'active' AND started_at < ?",
+		isoNow(), projectId, cutoff,
+	)
+}
+
 func (s *MemoryStore) getStartupContext(projectPath string, responseFormat string) (map[string]interface{}, error) {
 	project, err := s.ensureProject(projectPath)
 	if err != nil {
@@ -73,6 +81,7 @@ func (s *MemoryStore) getStartupContext(projectPath string, responseFormat strin
 		}
 		s.reinforceHotLessons(pid)
 	}
+	s.abandonStaleSessions(pid)
 
 	activeSessions, _ := s.queryRows("SELECT id, agent_name, namespace, started_at FROM sessions WHERE project_id = ? AND status = 'active' ORDER BY started_at DESC LIMIT 3", pid)
 	recentDecisions, _ := s.queryRows("SELECT id, decision, confidence, created_at FROM decisions WHERE project_id = ? ORDER BY id DESC LIMIT 5", pid)

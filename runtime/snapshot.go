@@ -36,12 +36,6 @@ func (r *Runtime) GetSnapshot(projectId, key string) (map[string]interface{}, bo
 	return result, true
 }
 
-func (r *Runtime) InvalidSnapshot(projectId, key string) {
-	r.snapshotMu.Lock()
-	delete(r.snapshots, projectId+":"+key)
-	r.snapshotMu.Unlock()
-}
-
 func (r *Runtime) InvalidProjectSnapshots(projectId string) {
 	prefix := projectId + ":"
 	r.snapshotMu.Lock()
